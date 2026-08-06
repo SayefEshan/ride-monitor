@@ -88,6 +88,53 @@ lifetime P&L, and no organization can see another's rows.
 owner is asked to trust — including the rule that a cost entered by the owner
 still reduces profit everywhere it appears.
 
+## Deployment
+
+Supabase already hosts the database, so the only thing to run is the Next.js
+server. It ships as a Docker image behind Caddy, which obtains and renews the
+TLS certificate itself — there is no certbot timer to forget about.
+
+**Once, on the server:**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/SayefEshan/ride-monitor/main/scripts/server-setup.sh | bash
+nano ~/ride-monitor/.env.production   # domain + Supabase keys
+```
+
+The script installs Docker, creates `~/ride-monitor`, and opens ports 80 and
+443. Point the domain's A record at the server before starting the stack, or
+the certificate request fails.
+
+**Once, on GitHub** — Settings → Secrets and variables → Actions:
+
+| Secret | What it is |
+| --- | --- |
+| `VPS_HOST` | server IP |
+| `VPS_USER` | login user (not root) |
+| `VPS_SSH_KEY` | private key that can log in as that user |
+| `APP_DOMAIN` | the domain, matching `.env.production` |
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key |
+
+The two `NEXT_PUBLIC_` values are needed in both places because Next.js inlines
+them into the browser bundle at build time. The service-role key is not among
+them: it is read only at run time from `.env.production`, and never enters an
+image layer.
+
+**Then every push to `main`** runs the checks, builds the image, pushes it to
+GHCR and restarts the server — and finally requests the login page to confirm
+the deploy actually serves traffic rather than merely starting.
+
+Each image is tagged with its commit sha as well as `latest`, so a bad deploy
+rolls back without a rebuild:
+
+```bash
+cd ~/ride-monitor
+APP_IMAGE=ghcr.io/sayefeshan/ride-monitor:<good-sha> docker compose up -d
+```
+
+Pull requests run the same checks without deploying.
+
 ## Roles
 
 **Driver** (mobile, Bangla by default) — today's report, own history, own

@@ -1,0 +1,15 @@
+node_modules
+.next
+.git
+.github
+.env*
+npm-debug.log*
+README.md
+import-report.md
+supabase/tests
+scripts/server-setup.sh
+Dockerfile
+.dockerignore
+docker-compose.yml
+Caddyfile
+.DS_Store

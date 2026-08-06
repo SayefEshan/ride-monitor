@@ -1,0 +1,47 @@
+# Production stack for the VPS.
+#
+#   docker compose pull && docker compose up -d
+#
+# Two containers: the Next.js server, and Caddy in front of it. Caddy obtains
+# and renews Let's Encrypt certificates on its own, which is why there is no
+# certbot cron job to forget about.
+#
+# The app is never published to the host — only Caddy binds 80/443, and it
+# reaches the app over the private compose network.
+
+services:
+  app:
+    image: ${APP_IMAGE:-ghcr.io/sayefeshan/ride-monitor:latest}
+    restart: unless-stopped
+    env_file: .env.production
+    expose:
+      - "3000"
+    healthcheck:
+      # The login page is public, so it answers without a session.
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/login"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      # Set APP_DOMAIN in .env.production; Caddy issues a certificate for it.
+      APP_DOMAIN: ${APP_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  # Certificates live here. Losing this volume means re-issuing them, and
+  # Let's Encrypt rate-limits that, so leave it alone.
+  caddy_data:
+  caddy_config:

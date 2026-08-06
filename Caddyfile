@@ -1,0 +1,16 @@
+# Caddy fetches and renews the TLS certificate for APP_DOMAIN automatically,
+# and redirects http to https without being asked.
+#
+# Point the domain's A record at the VPS before starting this, or the
+# certificate request will fail.
+
+{$APP_DOMAIN} {
+	encode gzip
+
+	reverse_proxy app:3000 {
+		# Next.js reads these to build absolute URLs and to see the real
+		# client address rather than Caddy's.
+		header_up X-Forwarded-Proto {scheme}
+		header_up X-Real-IP {remote_host}
+	}
+}
