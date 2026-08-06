@@ -1,36 +1,124 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Ride Monitor
 
-## Getting Started
+Business management for ride-sharing and rental vehicle owners.
 
-First, run the development server:
+The driver files one report a minute after their shift; the owner opens a
+dashboard that has already worked out income, expenses, driver pay, profit and
+cost per kilometre. It replaces a Google Form feeding a spreadsheet.
+
+## Why it exists
+
+The spreadsheet it replaces failed in measurable ways, and each one is designed
+out here rather than merely tidied up:
+
+| Spreadsheet problem | What the product does |
+| --- | --- |
+| Free text in money columns (`"2880..Taka"`, `"LPG/1200"`) produced `#VALUE!` totals | Money fields are numeric-only inputs against `numeric(12,2)` columns |
+| Two submissions for the same date | `unique (vehicle_id, log_date)` — a second submission edits the first |
+| No way to tell "car idle" from "driver forgot" | The first question is *did the car run today?*; a No is a recorded day |
+| Rental and corporate income had nowhere to go | First-class `rentals` table |
+| Receipts were loose Google Drive links | Photos attach to the day, in a private per-tenant bucket |
+| Owner recomputed everything by hand | Every figure is derived by SQL views and analytics functions |
+
+## Stack
+
+Next.js 16 (App Router, server components and actions) · Supabase (Postgres,
+RLS, Auth, Storage) · Tailwind v4 · Recharts · TypeScript.
+
+Multi-tenant from the first migration: every row carries `org_id` and is
+protected by row-level security, so opening the product to other owners is
+configuration rather than a rewrite.
+
+## Setup
+
+1. **Create a Supabase project**, then copy the keys:
+
+   ```bash
+   cp .env.example .env.local   # fill in from Project Settings -> API
+   ```
+
+2. **Apply the schema.** Paste `supabase/migrations/0001_init.sql` into the
+   Supabase SQL editor, or `supabase db push` if you use the CLI. It creates the
+   tables, the `daily_summary` and `vehicle_lifetime` views, every RLS policy,
+   and the private `receipts` storage bucket.
+
+3. **Run the app:**
+
+   ```bash
+   npm install
+   npm run dev
+   ```
+
+4. **Create your business** at `/onboarding` — account, business and first
+   vehicle in one step. Then add your driver in **Settings**; they sign in with
+   their mobile number and the password you set.
+
+## Importing the old spreadsheet
+
+Dry run first — it writes nothing and produces a report of every judgement call:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm run import:xlsx -- --file "~/Downloads/Driver tracker.xlsx"
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Read `import-report.md`, then apply:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm run import:xlsx -- --file "~/Downloads/Driver tracker.xlsx" --org <org-uuid> --apply
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Imported days are marked `needs_review` with a note explaining what was
+interpreted, and appear flagged in **Daily logs**. Re-running is safe: days are
+upserted by date and their earnings and expenses replaced, never doubled.
 
-## Learn More
+## Tests
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+npm test          # everything
+npm run test:unit # KPI, profit and anomaly logic
+npm run test:db   # schema, summary views and every RLS policy
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+`test:db` runs against a local Postgres with `auth` and `storage` stubbed
+(`supabase/tests/`), so it needs no Docker and no cloud project. It proves the
+confidentiality promise directly: a driver cannot read rentals, maintenance or
+lifetime P&L, and no organization can see another's rows.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+`test:unit` covers the money maths in `src/lib/analytics.ts` — the figures the
+owner is asked to trust — including the rule that a cost entered by the owner
+still reduces profit everywhere it appears.
 
-## Deploy on Vercel
+## Roles
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+**Driver** (mobile, Bangla by default) — today's report, own history, own
+payment ledger, own documents. Never sees profit, business expenses or
+analytics; enforced by RLS, not by hiding links.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+**Owner** (desktop and mobile, English by default) — dashboard, daily logs with
+receipt galleries, expenses, driver payment ledger, monthly reports with CSV
+export, vehicles and settings.
+
+## Project layout
+
+```
+src/app/(driver)/     today · history · profile              — the phone app
+src/app/(admin)/      dashboard · logs · expenses · drivers
+                      reports · settings                     — the business app
+src/lib/analytics.ts  KPI, profit and anomaly logic (pure functions, tested)
+src/lib/i18n.ts       both locales, typed so Bangla cannot drift from English
+supabase/migrations/  schema, views, RLS
+supabase/tests/       runnable RLS and summary verification
+scripts/              one-time spreadsheet migration
+```
+
+## Roadmap
+
+**Phase 1 (done)** — daily log, dashboard, daily logs with receipts, vehicles
+and drivers, spreadsheet import, installable PWA.
+
+**Phase 2 (done)** — driver payment ledger with payouts and outstanding
+balance, standalone expenses for costs outside the daily report, monthly P&L
+with category and platform splits, CSV export.
+
+**Phase 3** — rentals, maintenance log and service reminders, document expiry
+alerts, offline drafts. **Phase 4** — fleet views, SaaS onboarding and billing.

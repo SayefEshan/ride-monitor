@@ -1,26 +1,247 @@
 @import "tailwindcss";
 
+/*
+  Design system
+  =============
+
+  One rule governs colour: hue encodes the direction money moves, using the
+  conventions every finance tool has taught people already.
+
+    green   money coming in
+    red     money going out
+    blue    what is left over — the profit — and the brand's own actions
+    amber   needs attention (review flags, anomalies, balances due)
+
+  Every income source is a variation of the cool family, every cost is red.
+  Learn it once on the dashboard and any screen is readable at a glance,
+  because the palette *is* the legend. Colour is never spent on decoration; a
+  hue with no metric behind it does not belong here.
+
+  The chrome stays quiet — near-neutral surfaces — so the data carries all the
+  saturation. Two audiences share it: the driver, one-handed at night on a
+  mid-range Android, and the owner, scanning for what needs attention.
+*/
+
+@theme {
+  /* Chrome. Slightly cool greys so the money hues stay the loudest thing. */
+  --color-ink-50: #f5f6f9;
+  --color-ink-100: #e9ecf2;
+  --color-ink-200: #d2d8e4;
+  --color-ink-300: #a8b3c7;
+  --color-ink-400: #7a88a3;
+  --color-ink-500: #576683;
+  --color-ink-600: #414e68;
+  --color-ink-700: #313c52;
+  --color-ink-800: #212a3c;
+  --color-ink-900: #151d2c;
+  --color-ink-950: #0a0f1c;
+
+  /* ---- Money in ---- */
+  --color-income: #10b981;
+
+  /* ---- Money out ---- */
+  --color-expense: #ef4444;
+
+  /* ---- What you keep ---- */
+  --color-profit: #2563eb;
+
+  /* ---- Needs attention: review flags, anomalies, balances due ---- */
+  --color-warn: #d97706;
+
+  /* The -deep text tones are theme-dependent; see the :root blocks below. */
+
+  /* Distance is not money at all, so it sits outside both families. */
+  --color-distance: #8b5cf6;
+
+  /*
+    Income sources. All cool, because they are all money in — the eye should
+    never have to ask whether a platform bar is revenue or cost.
+  */
+  --color-series-1: #10b981;
+  --color-series-2: #0ea5e9;
+  --color-series-3: #8b5cf6;
+  --color-series-4: #14b8a6;
+  --color-series-5: #3b82f6;
+
+  /* Primary actions borrow the profit blue: the reason the owner is here. */
+  --color-brand: #2563eb;
+
+  /*
+    There is deliberately no separate "positive / negative" pair. A negative
+    profit is money that went out, so it takes the expense hue — one hue per
+    meaning, or the rule stops being learnable.
+  */
+
+  --font-display: var(--font-display-face), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-body-face), ui-sans-serif, system-ui, sans-serif;
+
+  --radius-card: 1.25rem;
+}
+
+/*
+  Tints are theme-dependent: a pale wash reads as a highlight on paper but as
+  dirt on a dark surface, where a translucent version of the hue itself works.
+*/
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --surface: #f7f8fa;
+  --surface-raised: #ffffff;
+  --surface-sunken: #eef1f6;
+  --border-subtle: #e2e6ee;
+  --text-primary: #151d2c;
+  --text-muted: #5b6880;
+
+  --tint-income: #d1fae5;
+  --tint-expense: #fee2e2;
+  --tint-profit: #dbeafe;
+  --tint-warn: #fef3c7;
+  --tint-distance: #ede9fe;
+  --tint-brand: #dbeafe;
+
+  /* Text on tinted chips: darker than the base hue on paper. */
+  --deep-income: #047857;
+  --deep-expense: #b91c1c;
+  --deep-profit: #1d4ed8;
+  --deep-warn: #92400e;
+
+  color-scheme: light;
+}
+
+/*
+  The theme is the user's explicit choice, stored in a cookie and stamped on
+  <html> as data-theme by the root layout — no flash, no dependence on the OS
+  setting. Light is the default.
+*/
+:root[data-theme="dark"] {
+  --surface: #0a0f1c;
+  --surface-raised: #131a29;
+  --surface-sunken: #0d1422;
+  --border-subtle: #24304a;
+  --text-primary: #eef1f7;
+  --text-muted: #94a2bd;
+
+  --tint-income: rgb(16 185 129 / 0.16);
+  --tint-expense: rgb(239 68 68 / 0.16);
+  --tint-profit: rgb(37 99 235 / 0.22);
+  --tint-warn: rgb(217 119 6 / 0.18);
+  --tint-distance: rgb(139 92 246 / 0.18);
+  --tint-brand: rgb(37 99 235 / 0.22);
+
+  /* Text on tinted chips: lighter than the base hue on a dark surface. */
+  --deep-income: #34d399;
+  --deep-expense: #f87171;
+  --deep-profit: #93c5fd;
+  --deep-warn: #fbbf24;
+
+  color-scheme: dark;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  --color-surface: var(--surface);
+  --color-raised: var(--surface-raised);
+  --color-sunken: var(--surface-sunken);
+  --color-hairline: var(--border-subtle);
+  --color-body: var(--text-primary);
+  --color-muted: var(--text-muted);
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-income-soft: var(--tint-income);
+  --color-expense-soft: var(--tint-expense);
+  --color-profit-soft: var(--tint-profit);
+  --color-warn-soft: var(--tint-warn);
+  --color-distance-soft: var(--tint-distance);
+  --color-brand-soft: var(--tint-brand);
+
+  --color-income-deep: var(--deep-income);
+  --color-expense-deep: var(--deep-expense);
+  --color-profit-deep: var(--deep-profit);
+  --color-warn-deep: var(--deep-warn);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--surface);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  /* Bangla and Latin need looser leading to sit together comfortably. */
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+/*
+  Money is compared column-to-column constantly, so figures are tabular and
+  set in the display face, whose numerals have more character than the UI face.
+*/
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+}
+
+/* iOS zooms the page when a focused input is under 16px. */
+input,
+select,
+textarea {
+  font-size: max(1rem, 16px);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* The drawer and its scrim; motion is short enough to feel like direct manipulation. */
+@keyframes drawer-in {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-drawer {
+  animation: drawer-in 0.22s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.animate-scrim {
+  animation: fade-in 0.22s ease-out;
+}
+
+/* Bars grow from zero on first paint, so proportions register as a change. */
+@keyframes grow-x {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.animate-bar {
+  transform-origin: left;
+  animation: grow-x 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
