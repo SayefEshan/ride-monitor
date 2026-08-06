@@ -54,7 +54,7 @@ Both locales live in one typed object in `src/lib/i18n.ts`, so a string added to
 
 ## Schema changes
 
-`supabase/tests/run-tests.sh` applies `00_supabase_stubs.sql` and then `0001_init.sql` explicitly — a new migration file must also be added to that script. Any new table needs `org_id`, RLS policies, and matching assertions in `01_rls_test.sql`. Data rules the schema already enforces (don't re-implement in app code): money columns are `numeric(12,2)`, one log per `(vehicle_id, log_date)` (a second submission edits the first), and driver pay terms are snapshotted onto each daily log so rate changes never rewrite history.
+`db/tests/run-tests.sh` applies every file in `db/migrations/` in filename order — the same rule `scripts/migrate.sh` uses in production, so a new migration file is picked up by both automatically. Any new table needs `org_id`, RLS policies, and matching assertions in `01_rls_test.sql`. Data rules the schema already enforces (don't re-implement in app code): money columns are `numeric(12,2)`, one log per `(vehicle_id, log_date)` (a second submission edits the first), and driver pay terms are snapshotted onto each daily log so rate changes never rewrite history.
 
 ## Design system
 

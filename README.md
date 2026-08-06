@@ -80,7 +80,7 @@ npm run test:db   # schema, summary views and every RLS policy
 ```
 
 `test:db` runs against a local Postgres with `auth` and `storage` stubbed
-(`supabase/tests/`), so it needs no Docker and no cloud project. It proves the
+(`db/tests/`), so it needs no Docker and no cloud project. It proves the
 confidentiality promise directly: a driver cannot read rentals, maintenance or
 lifetime P&L, and no organization can see another's rows.
 
@@ -168,7 +168,7 @@ src/app/(admin)/      dashboard · logs · expenses · drivers
 src/lib/analytics.ts  KPI, profit and anomaly logic (pure functions, tested)
 src/lib/i18n.ts       both locales, typed so Bangla cannot drift from English
 supabase/migrations/  schema, views, RLS
-supabase/tests/       runnable RLS and summary verification
+db/tests/       runnable RLS and summary verification
 scripts/              one-time spreadsheet migration
 ```
 

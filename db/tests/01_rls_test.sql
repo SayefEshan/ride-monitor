@@ -18,20 +18,9 @@ begin
 end;
 $$;
 
--- A non-superuser role, because superusers bypass RLS entirely.
-do $$
-begin
-  if not exists (select 1 from pg_roles where rolname = 'app_user') then
-    create role app_user nologin;
-  end if;
-end;
-$$;
-grant usage on schema public, auth, storage to app_user;
-grant select, insert, update, delete on all tables in schema public to app_user;
-grant select on all tables in schema auth to app_user;
-grant execute on all functions in schema public to app_user;
-grant execute on all functions in schema auth to app_user;
-grant execute on all functions in schema storage to app_user;
+-- The app_user / app_admin roles and their grants come from
+-- db/migrations/0000_platform.sql — the suite impersonates the exact roles
+-- production connects as. Superusers would bypass RLS entirely.
 
 -- ---------------------------------------------------------------------------
 -- Fixtures: two organizations, so cross-tenant leakage is testable.
@@ -183,6 +172,42 @@ values ('bbbbbbbb-0000-0000-0000-000000000000', 'b0000000-0000-0000-0000-0000000
 do $$
 begin
   raise notice 'pass: same date accepted on a second vehicle';
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- Credentials are invisible to the request path: app_user has no grant on
+-- auth.users, so even injected SQL cannot reach password hashes.
+-- ---------------------------------------------------------------------------
+set role app_user;
+do $$
+begin
+  begin
+    perform count(*) from auth.users;
+    raise exception 'FAIL: app_user can read auth.users';
+  exception when insufficient_privilege then
+    raise notice 'pass: app_user cannot read auth.users';
+  end;
+end;
+$$;
+reset role;
+
+-- ---------------------------------------------------------------------------
+-- app_admin is the service-role replacement: BYPASSRLS, sees every org with
+-- no impersonation claim set at all.
+-- ---------------------------------------------------------------------------
+set role app_admin;
+set request.jwt.claim.sub = '';
+do $$
+begin
+  perform assert_eq((select count(*) from daily_logs)::int, 2, 'app_admin bypasses RLS across orgs');
+  perform assert_eq((select count(*) from auth.users)::int, 3, 'app_admin can administer auth.users');
+end;
+$$;
+reset role;
+
+do $$
+begin
   raise notice 'ALL RLS AND SUMMARY TESTS PASSED';
 end;
 $$;

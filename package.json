@@ -9,7 +9,7 @@
     "lint": "eslint",
     "test": "npm run test:unit && npm run test:db",
     "test:unit": "node --import tsx --test src/lib/*.test.ts",
-    "test:db": "./supabase/tests/run-tests.sh",
+    "test:db": "./db/tests/run-tests.sh",
     "import:xlsx": "tsx scripts/import-xlsx.ts",
     "seed:demo": "tsx scripts/seed-demo.ts"
   },
