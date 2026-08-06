@@ -96,8 +96,24 @@ jobs:
             set -euo pipefail
             cd ~/ride-monitor
 
+            # Compose files, migrations, and scripts are read from this
+            # checkout, so it must match the commit being deployed.
+            git fetch origin main
+            git reset --hard origin/main
+
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_ACTOR" --password-stdin
             docker compose pull
+
+            # Database first: up, healthy, migrated — then the app. The DB
+            # role passwords live only in the server's .env, never in GitHub.
+            set -a; . ./.env; set +a
+            docker compose up -d --wait db
+            docker compose exec -T \
+              -e PGUSER=postgres -e PGDATABASE=ride_monitor \
+              -e MIGRATIONS_DIR=/migrations \
+              -e APP_DB_PASSWORD -e ADMIN_DB_PASSWORD \
+              db bash /scripts/migrate.sh
+
             docker compose up -d --remove-orphans
 
             # Old images pile up and fill a small VPS disk.
