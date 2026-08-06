@@ -56,7 +56,9 @@ jobs:
         run: npm run lint
 
       - name: Type check
-        run: npx tsc --noEmit
+        # PageProps/LayoutProps are globals that `next typegen` generates into
+        # .next/types, which a fresh checkout does not have yet.
+        run: npx next typegen && npx tsc --noEmit
 
       - name: Unit tests
         run: npm run test:unit
