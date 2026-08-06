@@ -209,6 +209,11 @@ export function Badge({
   );
 }
 
+/** Placeholder block for loading skeletons. Sized by the caller. */
+export function Skeleton({ className }: { className?: string }) {
+  return <div aria-hidden className={cn("animate-pulse rounded-xl bg-sunken", className)} />;
+}
+
 export function EmptyState({ title, body }: { title: string; body?: string }) {
   return (
     <div className="rounded-card border border-dashed border-hairline px-6 py-10 text-center">
