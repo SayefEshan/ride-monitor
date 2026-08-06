@@ -13,7 +13,9 @@ services:
   app:
     image: ${APP_IMAGE:-ghcr.io/sayefeshan/ride-monitor:latest}
     restart: unless-stopped
-    env_file: .env.production
+    # Must be `.env`: Compose reads only that filename when substituting
+    # ${APP_DOMAIN} below, so any other name leaves Caddy without a domain.
+    env_file: .env
     expose:
       - "3000"
     healthcheck:
@@ -33,7 +35,7 @@ services:
       - "80:80"
       - "443:443"
     environment:
-      # Set APP_DOMAIN in .env.production; Caddy issues a certificate for it.
+      # Set APP_DOMAIN in .env; Caddy issues a certificate for it.
       APP_DOMAIN: ${APP_DOMAIN}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro

@@ -7,7 +7,7 @@ npm-debug.log*
 README.md
 import-report.md
 supabase/tests
-scripts/server-setup.sh
+scripts/bootstrap.sh
 Dockerfile
 .dockerignore
 docker-compose.yml

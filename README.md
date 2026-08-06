@@ -94,32 +94,46 @@ Supabase already hosts the database, so the only thing to run is the Next.js
 server. It ships as a Docker image behind Caddy, which obtains and renews the
 TLS certificate itself — there is no certbot timer to forget about.
 
-**Once, on the server:**
+**Going live — one command on the server:**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/SayefEshan/ride-monitor/main/scripts/server-setup.sh | bash
-nano ~/ride-monitor/.env.production   # domain + Supabase keys
+curl -fsSL https://raw.githubusercontent.com/SayefEshan/ride-monitor/main/scripts/bootstrap.sh | bash
 ```
 
-The script installs Docker, creates `~/ride-monitor`, and opens ports 80 and
-443. Point the domain's A record at the server before starting the stack, or
-the certificate request fails.
+It installs Docker and git, clones this repo to `~/ride-monitor`, asks for the
+domain (default `ride.assist.bd`) and the three Supabase keys, builds the image
+on the server, starts it behind Caddy, and waits until the site actually
+answers before reporting success.
 
-**Once, on GitHub** — Settings → Secrets and variables → Actions:
+Nothing else is required for the first deploy — no registry, no CI run, no
+GitHub secrets. It builds from source. Re-running it pulls the latest `main`,
+keeps your answers, and restarts.
+
+Point the domain's A record at the server first. The script warns if the
+record does not resolve to this machine, because Caddy cannot obtain a
+certificate for a domain that points elsewhere.
+
+On a 1 GB VPS the script adds a 2 GB swapfile before building: `next build`
+needs more than a gigabyte and is otherwise killed mid-build by the OOM
+reaper, which looks like an unrelated failure.
+
+**Then, for automatic deploys on GitHub** — Settings → Secrets and variables →
+Actions. This is optional: the bootstrap above already runs the site, and
+these only add push-to-deploy on top.
 
 | Secret | What it is |
 | --- | --- |
 | `VPS_HOST` | server IP |
 | `VPS_USER` | login user (not root) |
 | `VPS_SSH_KEY` | private key that can log in as that user |
-| `APP_DOMAIN` | the domain, matching `.env.production` |
+| `APP_DOMAIN` | `ride.assist.bd` — must match `~/ride-monitor/.env` |
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key |
 
 The two `NEXT_PUBLIC_` values are needed in both places because Next.js inlines
 them into the browser bundle at build time. The service-role key is not among
-them: it is read only at run time from `.env.production`, and never enters an
-image layer.
+them: it is read only at run time from `~/ride-monitor/.env` on the server, and
+never enters an image layer.
 
 **Then every push to `main`** runs the checks, builds the image, pushes it to
 GHCR and restarts the server — and finally requests the login page to confirm
