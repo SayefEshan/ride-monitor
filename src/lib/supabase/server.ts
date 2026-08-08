@@ -5,7 +5,13 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createServerClient } from "@supabase/ssr";
 
-import { DEFAULT_DRIVER_LOCALE, LOCALE_COOKIE, isLocale, type Locale } from "@/lib/i18n";
+import {
+  DEFAULT_DRIVER_LOCALE,
+  DEFAULT_OWNER_LOCALE,
+  LOCALE_COOKIE,
+  isLocale,
+  type Locale,
+} from "@/lib/i18n";
 import { DEFAULT_THEME, THEME_COOKIE, isTheme, type Theme } from "@/lib/theme";
 import type { Organization, Profile, SessionContext } from "@/lib/types";
 
@@ -107,14 +113,17 @@ export async function getTheme(): Promise<Theme> {
 
 /**
  * Display language: an explicit cookie choice wins, then the user's saved
- * preference, then Bangla — the driver is the default reader.
+ * preference, then the default for the reader's role — English for the owner's
+ * business app, Bangla for the driver. Signed-out pages get Bangla, since the
+ * driver is the default reader.
  */
 export async function getLocale(): Promise<Locale> {
   const cookieValue = (await cookies()).get(LOCALE_COOKIE)?.value;
   if (isLocale(cookieValue)) return cookieValue;
 
   const session = await getSessionContext();
-  if (session && isLocale(session.profile.locale)) return session.profile.locale;
+  if (!session) return DEFAULT_DRIVER_LOCALE;
+  if (isLocale(session.profile.locale)) return session.profile.locale;
 
-  return DEFAULT_DRIVER_LOCALE;
+  return session.profile.role === "owner" ? DEFAULT_OWNER_LOCALE : DEFAULT_DRIVER_LOCALE;
 }

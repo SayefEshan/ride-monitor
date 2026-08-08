@@ -29,6 +29,9 @@ $$;
 grant usage on schema public, auth, storage to app_user;
 grant select, insert, update, delete on all tables in schema public to app_user;
 grant select on all tables in schema auth to app_user;
+-- Receipt files live in storage.objects, whose policies are part of the same
+-- confidentiality promise as the business tables.
+grant select, insert, update, delete on all tables in schema storage to app_user;
 grant execute on all functions in schema public to app_user;
 grant execute on all functions in schema auth to app_user;
 grant execute on all functions in schema storage to app_user;
@@ -91,6 +94,36 @@ insert into rentals (org_id, vehicle_id, type, client_name, start_at, amount) va
 insert into maintenance (org_id, vehicle_id, service_date, type, cost) values
   ('aaaaaaaa-0000-0000-0000-000000000000', 'a0000000-0000-0000-0000-00000000000a', date '2026-01-10', 'Oil change', 4500);
 
+-- Who drives what. Readable by any member of the org, writable only by owners.
+insert into vehicle_assignments (org_id, vehicle_id, driver_id) values
+  ('aaaaaaaa-0000-0000-0000-000000000000', 'a0000000-0000-0000-0000-00000000000a',
+   '22222222-2222-2222-2222-222222222222');
+
+-- Cash handed to the driver. They read their own ledger; the owner manages it.
+insert into driver_payments (org_id, driver_id, amount, paid_on) values
+  ('aaaaaaaa-0000-0000-0000-000000000000', '22222222-2222-2222-2222-222222222222', 1200, date '2026-01-16'),
+  ('aaaaaaaa-0000-0000-0000-000000000000', '22222222-2222-2222-2222-222222222222', 800,  date '2026-01-31'),
+  -- Org B's own ledger, so cross-tenant leakage is testable.
+  ('bbbbbbbb-0000-0000-0000-000000000000', '33333333-3333-3333-3333-333333333333', 5000, date '2026-01-20');
+
+-- A driver manages their own licence but must not see the car's papers.
+insert into documents (org_id, owner_type, owner_id, doc_type) values
+  ('aaaaaaaa-0000-0000-0000-000000000000', 'driver', '22222222-2222-2222-2222-222222222222', 'Driving licence'),
+  ('aaaaaaaa-0000-0000-0000-000000000000', 'vehicle', 'a0000000-0000-0000-0000-00000000000a', 'Fitness certificate'),
+  ('bbbbbbbb-0000-0000-0000-000000000000', 'vehicle', 'b0000000-0000-0000-0000-00000000000b', 'Insurance');
+
+-- Receipt metadata hanging off the driver's own log.
+insert into attachments (org_id, parent_type, parent_id, storage_path, uploaded_by) values
+  ('aaaaaaaa-0000-0000-0000-000000000000', 'daily_log', 'd0000000-0000-0000-0000-00000000000d',
+   'aaaaaaaa-0000-0000-0000-000000000000/2026-01-15/fuel.jpg', '22222222-2222-2222-2222-222222222222'),
+  ('bbbbbbbb-0000-0000-0000-000000000000', 'daily_log', 'd0000000-0000-0000-0000-00000000000d',
+   'bbbbbbbb-0000-0000-0000-000000000000/2026-01-15/fuel.jpg', '33333333-3333-3333-3333-333333333333');
+
+-- The receipt files themselves. The first path segment scopes the tenant.
+insert into storage.objects (bucket_id, name) values
+  ('receipts', 'aaaaaaaa-0000-0000-0000-000000000000/2026-01-15/fuel.jpg'),
+  ('receipts', 'bbbbbbbb-0000-0000-0000-000000000000/2026-01-15/fuel.jpg');
+
 -- ---------------------------------------------------------------------------
 -- Derived-value correctness (the owner must never calculate by hand)
 -- ---------------------------------------------------------------------------
@@ -125,6 +158,21 @@ begin
   -- Drivers see only themselves in the roster, never the owner or their pay terms.
   perform assert_eq((select count(*) from profiles)::int, 1, 'driver sees only own profile');
   perform assert_eq((select count(*) from organizations)::int, 1, 'driver sees own org record only');
+
+  -- Their own ledger, and nobody else's.
+  perform assert_eq((select count(*) from driver_payments)::int, 2, 'driver sees own payments');
+  perform assert_eq((select sum(amount) from driver_payments)::numeric, 2000::numeric,
+                    'driver payment total is their own only');
+  perform assert_eq((select count(*) from vehicle_assignments)::int, 1, 'driver sees org assignments');
+
+  -- Personal papers yes; the car's papers are the owner's business.
+  perform assert_eq((select count(*) from documents)::int, 1, 'driver sees only own documents');
+  perform assert_eq((select count(*) from documents where owner_type = 'vehicle')::int, 0,
+                    'driver CANNOT read vehicle documents');
+
+  -- Receipts: their own metadata row, and only their org's files.
+  perform assert_eq((select count(*) from attachments)::int, 1, 'driver sees own attachments');
+  perform assert_eq((select count(*) from storage.objects)::int, 1, 'driver sees own org receipts only');
 end;
 $$;
 
@@ -167,6 +215,49 @@ begin
     raise notice 'pass: cross-org earning insert rejected';
   end;
 
+  -- Owner-only tables: a driver may read nothing and write nothing.
+  begin
+    insert into driver_payments (org_id, driver_id, amount)
+    values ('aaaaaaaa-0000-0000-0000-000000000000', auth.uid(), 5000);
+    raise exception 'FAIL: driver recorded their own payment';
+  exception when insufficient_privilege then
+    raise notice 'pass: driver cannot record a payment to themselves';
+  end;
+
+  begin
+    insert into vehicle_assignments (org_id, vehicle_id, driver_id)
+    values ('aaaaaaaa-0000-0000-0000-000000000000', 'a0000000-0000-0000-0000-00000000000a', auth.uid());
+    raise exception 'FAIL: driver assigned themselves a vehicle';
+  exception when insufficient_privilege then
+    raise notice 'pass: driver cannot assign themselves a vehicle';
+  end;
+
+  begin
+    insert into rentals (org_id, vehicle_id, start_at, amount)
+    values ('aaaaaaaa-0000-0000-0000-000000000000', 'a0000000-0000-0000-0000-00000000000a', now(), 8000);
+    raise exception 'FAIL: driver created a rental';
+  exception when insufficient_privilege then
+    raise notice 'pass: driver cannot create a rental';
+  end;
+
+  begin
+    insert into maintenance (org_id, vehicle_id, service_date, type)
+    values ('aaaaaaaa-0000-0000-0000-000000000000', 'a0000000-0000-0000-0000-00000000000a',
+            date '2026-02-01', 'Oil change');
+    raise exception 'FAIL: driver created a maintenance record';
+  exception when insufficient_privilege then
+    raise notice 'pass: driver cannot create a maintenance record';
+  end;
+
+  -- Receipts belong to the org's folder; another tenant's prefix is refused.
+  begin
+    insert into storage.objects (bucket_id, name)
+    values ('receipts', 'bbbbbbbb-0000-0000-0000-000000000000/2026-02-01/forged.jpg');
+    raise exception 'FAIL: driver wrote into another org''s receipt folder';
+  exception when insufficient_privilege then
+    raise notice 'pass: driver cannot write into another org''s receipt folder';
+  end;
+
   -- A foreign org's vehicle cannot anchor this org's day.
   begin
     insert into daily_logs (org_id, vehicle_id, driver_id, log_date, status)
@@ -192,6 +283,13 @@ begin
   perform assert_eq((select count(*) from rentals)::int,      0, 'cross-tenant: no foreign rentals');
   perform assert_eq((select count(*) from vehicles)::int,     1, 'cross-tenant: only own vehicle');
   perform assert_eq((select count(*) from daily_summary)::int, 0, 'cross-tenant: summary view respects RLS');
+
+  -- Org B holds one payment of its own and must see no trace of Org A's.
+  perform assert_eq((select count(*) from driver_payments)::int, 1, 'cross-tenant: only own payments');
+  perform assert_eq((select count(*) from vehicle_assignments)::int, 0, 'cross-tenant: no foreign assignments');
+  perform assert_eq((select count(*) from documents)::int, 1, 'cross-tenant: only own documents');
+  perform assert_eq((select count(*) from attachments)::int, 1, 'cross-tenant: only own attachments');
+  perform assert_eq((select count(*) from storage.objects)::int, 1, 'cross-tenant: only own receipt files');
 end;
 $$;
 
@@ -207,6 +305,11 @@ begin
   perform assert_eq((select count(*) from rentals)::int,     1, 'owner sees rentals');
   perform assert_eq((select count(*) from maintenance)::int, 1, 'owner sees maintenance');
   perform assert_eq((select count(*) from profiles)::int,    2, 'owner sees full roster');
+  perform assert_eq((select count(*) from vehicle_assignments)::int, 1, 'owner sees assignments');
+  perform assert_eq((select count(*) from driver_payments)::int, 2, 'owner sees the org payment ledger');
+  perform assert_eq((select count(*) from documents)::int,   2, 'owner sees driver and vehicle documents');
+  perform assert_eq((select count(*) from attachments)::int, 1, 'owner sees receipt attachments');
+  perform assert_eq((select count(*) from storage.objects)::int, 1, 'owner sees own org receipt files');
 
   select * into v from vehicle_lifetime where vehicle_id = 'a0000000-0000-0000-0000-00000000000a';
   perform assert_eq(v.total_income::numeric,  3000::numeric, 'lifetime income rolls up');
