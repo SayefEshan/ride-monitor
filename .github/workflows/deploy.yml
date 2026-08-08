@@ -90,8 +90,9 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          script_stop: true
           envs: GHCR_ACTOR,GHCR_TOKEN,APP_IMAGE
+          # `set -e` below is what aborts on a failed command; the action's own
+          # script_stop input was dropped in v1 and is ignored with a warning.
           script: |
             set -euo pipefail
             cd ~/ride-monitor
