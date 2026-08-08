@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 
 import { Badge, Card, EmptyState } from "@/components/ui";
-import { summarize } from "@/lib/analytics";
+import { summarize, withStandalone } from "@/lib/analytics";
 import { cn } from "@/lib/cn";
 import {
   addDays,
@@ -30,15 +30,40 @@ export default async function LogsPage({ searchParams }: PageProps<"/logs">) {
       : today;
   const range = monthRange(anchor);
 
-  const { data } = await supabase
-    .from("daily_summary")
-    .select("*")
-    .gte("log_date", range.start)
-    .lte("log_date", range.end)
-    .order("log_date", { ascending: false });
+  const [{ data, error: summaryError }, { data: standaloneRows, error: expenseError }] =
+    await Promise.all([
+      supabase
+        .from("daily_summary")
+        .select("*")
+        .gte("log_date", range.start)
+        .lte("log_date", range.end)
+        .order("log_date", { ascending: false }),
+      // An owner-entered cost has no daily log behind it, so daily_summary —
+      // which joins expenses on log_id — cannot see it at all. Fetch those
+      // separately; without them this page quotes a different profit for the
+      // same month than the dashboard and the monthly report do.
+      supabase
+        .from("expenses")
+        .select("amount, expense_date")
+        .is("log_id", null)
+        .gte("expense_date", range.start)
+        .lte("expense_date", range.end),
+    ]);
+
+  // Fail loudly rather than render a plausible month that is quietly short.
+  const queryError = summaryError ?? expenseError;
+  if (queryError) throw new Error("log queries failed", { cause: queryError });
 
   const days = (data ?? []) as DailySummary[];
-  const totals = summarize(days);
+  // Folded in with the same withStandalone() the dashboard and the report use,
+  // so all three screens can never disagree about one month's profit.
+  const totals = withStandalone(
+    summarize(days),
+    (standaloneRows ?? []).map((row) => ({
+      expense_date: row.expense_date,
+      amount: Number(row.amount),
+    })),
+  );
 
   const previous = monthRange(addDays(range.start, -1)).start.slice(0, 7);
   const nextMonth = monthRange(addDays(range.end, 1)).start.slice(0, 7);
