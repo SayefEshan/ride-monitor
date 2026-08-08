@@ -45,3 +45,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 import-report.md
+
+# generated knowledge graph — rebuild with `graphify update .`
+/graphify-out/
