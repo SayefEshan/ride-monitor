@@ -98,6 +98,18 @@ export function TodayForm({
   const label = (c: ExpenseCategory) => (locale === "bn" && c.name_bn ? c.name_bn : c.name);
   const platformLabel = (p: Platform) => (locale === "bn" && p.name_bn ? p.name_bn : p.name);
 
+  // submitDailyLog returns "invalid" | "vehicle" | "save"; the upload path
+  // sets "upload". Each failure reads differently — a validation slip is the
+  // driver's to fix, a save failure is not.
+  const errorText = (code: string) =>
+    code === "invalid"
+      ? dict.driver.errInvalid
+      : code === "vehicle"
+        ? dict.driver.errVehicle
+        : code === "upload"
+          ? dict.driver.errUpload
+          : dict.driver.errSave;
+
   const num = (value: string) => {
     const parsed = Number(value);
     return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
@@ -227,7 +239,7 @@ export function TodayForm({
           ))}
         </div>
 
-        {error && <ErrorNote>{dict.common.retry}</ErrorNote>}
+        {error && <ErrorNote>{errorText(error)}</ErrorNote>}
 
         <div className="flex gap-3">
           <Button variant="secondary" onClick={() => setStatus(null)}>
@@ -386,7 +398,7 @@ export function TodayForm({
         </Field>
       </Card>
 
-      {error && <ErrorNote>{dict.common.retry}</ErrorNote>}
+      {error && <ErrorNote>{errorText(error)}</ErrorNote>}
 
       {/* The running total sits above the thumb so the driver can sanity-check
           the day before committing to it. */}

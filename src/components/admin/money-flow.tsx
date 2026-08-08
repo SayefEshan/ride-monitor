@@ -1,5 +1,6 @@
 import { cn } from "@/lib/cn";
 import { formatMoney, formatPercent } from "@/lib/format";
+import { t } from "@/lib/i18n";
 
 /**
  * The settle-up bar: the whole day's economics as one object.
@@ -13,14 +14,25 @@ export function MoneyFlow({
   income,
   expense,
   driverPay,
+  net,
   labels,
 }: {
   income: number;
   expense: number;
   driverPay: number;
-  labels: { income: string; expense: string; driverPay: string; profit: string };
+  /** The already-derived profit figure, so this bar can never disagree with
+      the headline number above it. */
+  net: number;
+  labels: {
+    income: string;
+    expense: string;
+    driverPay: string;
+    profit: string;
+    /** "{pct}" template for the you-keep-this-share line. */
+    keepShare: string;
+  };
 }) {
-  const profit = income - expense - driverPay;
+  const profit = net;
 
   // With no income there is nothing to carve up, and a loss would overflow the
   // bar, so the scale falls back to total outgoings.
@@ -76,7 +88,7 @@ export function MoneyFlow({
 
       {income > 0 && (
         <p className="text-xs text-muted">
-          You keep {formatPercent((profit / income) * 100)} of what the car earned.
+          {t(labels.keepShare, { pct: formatPercent((profit / income) * 100) })}
         </p>
       )}
     </div>

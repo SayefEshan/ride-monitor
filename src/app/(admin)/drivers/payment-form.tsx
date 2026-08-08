@@ -21,20 +21,29 @@ export function PaymentForm({
 }) {
   const [state, formAction] = useActionState<PaymentState, FormData>(recordPayment, {});
 
+  const errors: Record<string, string> = {
+    invalid: dict.admin.paymentInvalid,
+    driver: dict.admin.paymentUnknownDriver,
+    save: dict.admin.paymentSaveFailed,
+  };
+
   return (
     <form action={formAction} className="space-y-3">
       <input type="hidden" name="driverId" value={driverId} />
 
-      {state.error && <ErrorNote>{state.error}</ErrorNote>}
+      {state.error && <ErrorNote>{errors[state.error] ?? dict.admin.paymentSaveFailed}</ErrorNote>}
       {state.success && (
         <p role="status" className="rounded-xl bg-income-soft px-4 py-3 text-sm font-medium text-income-deep">
-          {state.success}
+          {dict.admin.paymentRecorded}
         </p>
       )}
 
       <div className="grid gap-3 sm:grid-cols-3">
         <Field label={dict.admin.amount} htmlFor={`amount-${driverId}`}>
           <MoneyInput
+            // Keyed so the prefill follows the fresh balance after a payment
+            // is recorded, instead of freezing at the mount-time figure.
+            key={suggested}
             id={`amount-${driverId}`}
             name="amount"
             required

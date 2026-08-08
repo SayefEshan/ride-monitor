@@ -46,7 +46,7 @@ export default async function NewLogPage({ searchParams }: PageProps<"/logs/new"
     return (
       <div className="space-y-4">
         <h1 className="text-xl font-semibold text-body">{dict.admin.addReport}</h1>
-        <EmptyState title={dict.admin.noData} body="Add a vehicle in Settings first." />
+        <EmptyState title={dict.admin.noData} body={dict.admin.addVehicleFirst} />
       </div>
     );
   }
@@ -76,9 +76,9 @@ export default async function NewLogPage({ searchParams }: PageProps<"/logs/new"
   const { data: driver } = driverId
     ? await supabase
         .from("profiles")
-        .select("id, full_name, pay_value")
+        .select("id, full_name, pay_value, pay_model")
         .eq("id", driverId)
-        .maybeSingle<Pick<Profile, "id" | "full_name" | "pay_value">>()
+        .maybeSingle<Pick<Profile, "id" | "full_name" | "pay_value" | "pay_model">>()
     : { data: null };
 
   let existing: ExistingLog | null = null;
@@ -157,6 +157,10 @@ export default async function NewLogPage({ searchParams }: PageProps<"/logs/new"
       </Card>
 
       <TodayForm
+        // Form state initialises from props; the key forces a remount when
+        // the owner switches the date or vehicle, so a half-typed day can
+        // never leak into another one.
+        key={`${vehicle.id}-${logDate}`}
         dict={dict}
         locale={locale}
         orgId={session.profile.org_id}
@@ -164,7 +168,9 @@ export default async function NewLogPage({ searchParams }: PageProps<"/logs/new"
         logDate={logDate}
         platforms={(platforms ?? []) as Platform[]}
         categories={(categories ?? []) as ExpenseCategory[]}
-        defaultDriverPay={Number(driver?.pay_value) || 0}
+        defaultDriverPay={
+          driver?.pay_model === "fixed_daily" ? Number(driver.pay_value) || 0 : 0
+        }
         existing={existing}
         headings={{
           didCarRun: t(dict.admin.didCarRunOn, { date: readableDate }),

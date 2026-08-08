@@ -58,7 +58,7 @@ export default async function LogsPage({ searchParams }: PageProps<"/logs">) {
         <nav className="flex items-center gap-2 text-sm">
           <Link
             href={`/logs?month=${previous}`}
-            aria-label="Previous month"
+            aria-label={dict.common.prevMonth}
             className="rounded-lg border border-hairline px-3 py-1.5 text-body"
           >
             ←
@@ -68,7 +68,7 @@ export default async function LogsPage({ searchParams }: PageProps<"/logs">) {
           </span>
           <Link
             href={canGoForward ? `/logs?month=${nextMonth}` : "/logs"}
-            aria-label="Next month"
+            aria-label={dict.common.nextMonth}
             aria-disabled={!canGoForward}
             className={cn(
               "rounded-lg border border-hairline px-3 py-1.5 text-body",

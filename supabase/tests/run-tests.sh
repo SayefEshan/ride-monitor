@@ -17,7 +17,10 @@ dropdb --if-exists "$DB"
 createdb "$DB"
 
 psql -v ON_ERROR_STOP=1 -q -d "$DB" -f "$HERE/00_supabase_stubs.sql"
-psql -v ON_ERROR_STOP=1 -q -d "$DB" -f "$HERE/../migrations/0001_init.sql"
+# Filename order is the migration order, same as production.
+for migration in "$HERE"/../migrations/*.sql; do
+  psql -v ON_ERROR_STOP=1 -q -d "$DB" -f "$migration"
+done
 
 # Each assertion raises a NOTICE on success and an exception on failure, so a
 # clean exit status is the pass condition.

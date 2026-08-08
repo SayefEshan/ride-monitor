@@ -35,6 +35,7 @@ const schema = z.object({
   fuelType: z.string().max(40).default("LPG"),
 });
 
+// Codes, not sentences; the form maps them through the dictionary.
 export type OnboardingState = { error?: string };
 
 /**
@@ -58,7 +59,7 @@ export async function createBusiness(
     fuelType: formData.get("fuelType") || "LPG",
   });
 
-  if (!parsed.success) return { error: "Please check the form and try again." };
+  if (!parsed.success) return { error: "invalid" };
   const input = parsed.data;
 
   const admin = createSupabaseAdminClient();
@@ -72,11 +73,7 @@ export async function createBusiness(
 
   if (authError || !created.user) {
     const alreadyExists = authError?.message?.toLowerCase().includes("already");
-    return {
-      error: alreadyExists
-        ? "An account with this email already exists."
-        : "Could not create the account.",
-    };
+    return { error: alreadyExists ? "emailExists" : "account" };
   }
 
   const userId = created.user.id;
@@ -90,7 +87,7 @@ export async function createBusiness(
   if (orgError || !org) {
     // Leaving an orphaned login behind would block the owner from retrying.
     await admin.auth.admin.deleteUser(userId);
-    return { error: "Could not create the business." };
+    return { error: "business" };
   }
 
   const { error: profileError } = await admin.from("profiles").insert({
@@ -106,23 +103,40 @@ export async function createBusiness(
   if (profileError) {
     await admin.from("organizations").delete().eq("id", org.id);
     await admin.auth.admin.deleteUser(userId);
-    return { error: "Could not create your profile." };
+    return { error: "profile" };
   }
 
-  await admin.from("vehicles").insert({
-    org_id: org.id,
-    name: input.vehicleName,
-    plate_no: input.plateNo ?? null,
-    fuel_type: input.fuelType,
-  });
+  // The tenant is only viable with its vehicle and reference data — without a
+  // vehicle no day can ever be filed. Roll the whole signup back on failure
+  // (deleting the org cascades to profile, vehicle, platforms, categories)
+  // rather than redirecting the owner into a half-built dashboard.
+  const [{ error: vehicleError }, { error: platformsError }, { error: categoriesError }] =
+    await Promise.all([
+      admin.from("vehicles").insert({
+        org_id: org.id,
+        name: input.vehicleName,
+        plate_no: input.plateNo ?? null,
+        fuel_type: input.fuelType,
+      }),
+      admin.from("platforms").insert(SEED_PLATFORMS.map((p) => ({ ...p, org_id: org.id }))),
+      admin
+        .from("expense_categories")
+        .insert(SEED_CATEGORIES.map((c) => ({ ...c, org_id: org.id, is_system: true }))),
+    ]);
 
-  await admin.from("platforms").insert(SEED_PLATFORMS.map((p) => ({ ...p, org_id: org.id })));
-  await admin
-    .from("expense_categories")
-    .insert(SEED_CATEGORIES.map((c) => ({ ...c, org_id: org.id, is_system: true })));
+  if (vehicleError || platformsError || categoriesError) {
+    await admin.from("organizations").delete().eq("id", org.id);
+    await admin.auth.admin.deleteUser(userId);
+    return { error: "setup" };
+  }
 
   const supabase = await createSupabaseServerClient();
-  await supabase.auth.signInWithPassword({ email: input.email, password: input.password });
+  const { error: signInError } = await supabase.auth.signInWithPassword({
+    email: input.email,
+    password: input.password,
+  });
 
-  redirect("/dashboard");
+  // The business exists either way; if the automatic sign-in hiccuped, the
+  // owner signs in manually rather than seeing a phantom failure.
+  redirect(signInError ? "/login" : "/dashboard");
 }

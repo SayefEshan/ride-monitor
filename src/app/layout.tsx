@@ -3,7 +3,7 @@ import { Inter, Noto_Sans_Bengali, Space_Grotesk } from "next/font/google";
 
 import "./globals.css";
 
-import { getTheme } from "@/lib/supabase/server";
+import { getLocale, getTheme } from "@/lib/supabase/server";
 
 // Headings and every figure. Space Grotesk descends from Space Mono, so its
 // numerals keep a mechanical, metered quality — the right voice for a business
@@ -52,11 +52,13 @@ export async function generateViewport(): Promise<Viewport> {
 }
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
-  const theme = await getTheme();
+  const [theme, locale] = await Promise.all([getTheme(), getLocale()]);
 
   return (
     <html
-      lang="en"
+      // Screen readers pick their voice from this; Bangla text read with an
+      // English engine defeats the Bangla-first design.
+      lang={locale}
       data-theme={theme}
       className={`${display.variable} ${inter.variable} ${bengali.variable} h-full`}
     >

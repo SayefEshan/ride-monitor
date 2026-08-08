@@ -78,6 +78,12 @@ insert into expenses (org_id, vehicle_id, log_id, category_id, expense_date, amo
   ('aaaaaaaa-0000-0000-0000-000000000000', 'a0000000-0000-0000-0000-00000000000a', 'd0000000-0000-0000-0000-00000000000d',
    'ad000000-0000-0000-0000-00000000000a', date '2026-01-15', 200);
 
+-- An owner-entered standalone expense: no daily log behind it, must still
+-- reduce lifetime P&L.
+insert into expenses (org_id, vehicle_id, category_id, expense_date, amount) values
+  ('aaaaaaaa-0000-0000-0000-000000000000', 'a0000000-0000-0000-0000-00000000000a',
+   'ad000000-0000-0000-0000-00000000000a', date '2026-01-20', 500);
+
 -- Owner-only data the driver must never see.
 insert into rentals (org_id, vehicle_id, type, client_name, start_at, amount) values
   ('aaaaaaaa-0000-0000-0000-000000000000', 'a0000000-0000-0000-0000-00000000000a', 'corporate', 'Acme Ltd', now(), 8000);
@@ -123,6 +129,57 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
+-- Forbidden writes: policies must reject these, not merely hide the rows.
+-- ---------------------------------------------------------------------------
+do $$
+begin
+  -- Privilege escalation. RLS cannot restrict columns; the trigger must.
+  begin
+    update profiles set role = 'owner', pay_value = 999999 where id = auth.uid();
+    raise exception 'FAIL: driver self-promotion was accepted';
+  exception when insufficient_privilege then
+    raise notice 'pass: driver cannot change own role or pay';
+  end;
+
+  -- The unprivileged columns stay editable.
+  update profiles set locale = 'en' where id = auth.uid();
+  perform assert_eq(
+    (select locale from profiles where id = auth.uid()), 'en'::text,
+    'driver can still edit own locale');
+
+  -- Cross-org injection: the row's own org_id must match the caller's org.
+  begin
+    insert into expenses (org_id, vehicle_id, log_id, category_id, expense_date, amount)
+    values ('bbbbbbbb-0000-0000-0000-000000000000', 'a0000000-0000-0000-0000-00000000000a',
+            'd0000000-0000-0000-0000-00000000000d', 'ac000000-0000-0000-0000-00000000000a',
+            date '2026-01-15', 999999);
+    raise exception 'FAIL: cross-org expense insert was accepted';
+  exception when insufficient_privilege then
+    raise notice 'pass: cross-org expense insert rejected';
+  end;
+
+  begin
+    insert into log_earnings (org_id, log_id, platform_id, amount)
+    values ('bbbbbbbb-0000-0000-0000-000000000000', 'd0000000-0000-0000-0000-00000000000d',
+            'a1000000-0000-0000-0000-00000000000a', 999999);
+    raise exception 'FAIL: cross-org earning insert was accepted';
+  exception when insufficient_privilege then
+    raise notice 'pass: cross-org earning insert rejected';
+  end;
+
+  -- A foreign org's vehicle cannot anchor this org's day.
+  begin
+    insert into daily_logs (org_id, vehicle_id, driver_id, log_date, status)
+    values ('aaaaaaaa-0000-0000-0000-000000000000', 'b0000000-0000-0000-0000-00000000000b',
+            '22222222-2222-2222-2222-222222222222', date '2026-02-01', 'worked');
+    raise exception 'FAIL: foreign-org vehicle was accepted on a daily log';
+  exception when foreign_key_violation then
+    raise notice 'pass: foreign-org vehicle rejected on a daily log';
+  end;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
 -- Owner B must not see a single row belonging to Org A
 -- ---------------------------------------------------------------------------
 set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
@@ -152,9 +209,35 @@ begin
   perform assert_eq((select count(*) from profiles)::int,    2, 'owner sees full roster');
 
   select * into v from vehicle_lifetime where vehicle_id = 'a0000000-0000-0000-0000-00000000000a';
-  perform assert_eq(v.total_income::numeric, 3000::numeric, 'lifetime income rolls up');
-  perform assert_eq(v.total_net::numeric,    1000::numeric, 'lifetime net rolls up');
-  perform assert_eq(v.worked_days::int,      1,             'lifetime counts worked days');
+  perform assert_eq(v.total_income::numeric,  3000::numeric, 'lifetime income rolls up');
+  perform assert_eq(v.total_expense::numeric, 2200::numeric, 'lifetime expense includes standalone costs');
+  perform assert_eq(v.total_net::numeric,     500::numeric,  'lifetime net reflects standalone costs');
+  perform assert_eq(v.worked_days::int,       1,             'lifetime counts worked days');
+end;
+$$;
+
+reset role;
+
+-- ---------------------------------------------------------------------------
+-- Once the owner reviews a day, the driver may still read it but never
+-- rewrite it. Blocked writes are filtered to zero rows, so assert no effect.
+-- ---------------------------------------------------------------------------
+update daily_logs set reviewed_at = now() where id = 'd0000000-0000-0000-0000-00000000000d';
+
+set role app_user;
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+
+do $$
+begin
+  delete from log_earnings where log_id = 'd0000000-0000-0000-0000-00000000000d';
+  delete from expenses     where log_id = 'd0000000-0000-0000-0000-00000000000d';
+  update log_earnings set amount = 0 where log_id = 'd0000000-0000-0000-0000-00000000000d';
+  update daily_logs   set km = 999   where id     = 'd0000000-0000-0000-0000-00000000000d';
+
+  perform assert_eq((select count(*) from log_earnings)::int, 2, 'reviewed day: earnings survive driver delete');
+  perform assert_eq((select count(*) from expenses)::int,     2, 'reviewed day: expenses survive driver delete');
+  perform assert_eq((select sum(amount) from log_earnings)::numeric, 3000::numeric, 'reviewed day: earnings survive driver update');
+  perform assert_eq((select km from daily_logs where id = 'd0000000-0000-0000-0000-00000000000d')::numeric, 120::numeric, 'reviewed day: log survives driver update');
 end;
 $$;
 

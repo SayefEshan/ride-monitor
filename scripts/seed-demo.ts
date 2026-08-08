@@ -9,6 +9,7 @@
  * and the foreign keys cascade the rest away.
  */
 
+import { randomBytes } from "node:crypto";
 import { parseArgs } from "node:util";
 
 import { createClient } from "@supabase/supabase-js";
@@ -18,7 +19,9 @@ import { config } from "dotenv";
 config({ path: ".env.local" });
 
 const DEMO_EMAIL = "demo-preview@ridemonitor.local";
-const DEMO_PASSWORD = "preview-only-4821";
+// Fresh per run and printed at the end — a fixed literal in a public repo
+// would be a known login to whatever project the seed ran against.
+const DEMO_PASSWORD = `preview-${randomBytes(6).toString("hex")}`;
 const DEMO_ORG = "Demo — design preview";
 
 // The demo needs a driver as well as an owner, or the Drivers screen and the
@@ -105,7 +108,7 @@ async function seed() {
     .single();
   if (!org) throw new Error("could not create organization");
 
-  await admin.from("profiles").insert({
+  const { error: ownerProfileError } = await admin.from("profiles").insert({
     id: created.user.id,
     org_id: org.id,
     role: "owner",
@@ -113,6 +116,7 @@ async function seed() {
     locale: "en",
     pay_model: "none",
   });
+  if (ownerProfileError) throw new Error(`owner profile: ${ownerProfileError.message}`);
 
   const { data: vehicle } = await admin
     .from("vehicles")
@@ -133,7 +137,7 @@ async function seed() {
   }
   const driverId = createdDriver.user.id;
 
-  await admin.from("profiles").insert({
+  const { error: driverProfileError } = await admin.from("profiles").insert({
     id: driverId,
     org_id: org.id,
     role: "driver",
@@ -143,15 +147,17 @@ async function seed() {
     pay_model: "fixed_daily",
     pay_value: DEMO_DRIVER_PAY,
   });
+  if (driverProfileError) throw new Error(`driver profile: ${driverProfileError.message}`);
 
-  await admin.from("vehicle_assignments").insert({
+  const { error: assignmentError } = await admin.from("vehicle_assignments").insert({
     org_id: org.id,
     vehicle_id: vehicle.id,
     driver_id: driverId,
     started_on: isoDaysAgo(89),
   });
+  if (assignmentError) throw new Error(`assignment: ${assignmentError.message}`);
 
-  const { data: platforms } = await admin
+  const { data: platforms, error: platformsError } = await admin
     .from("platforms")
     .insert(
       PLATFORMS.map((p) => ({
@@ -162,11 +168,13 @@ async function seed() {
       })),
     )
     .select("id, name");
+  if (platformsError) throw new Error(`platforms: ${platformsError.message}`);
 
-  const { data: categories } = await admin
+  const { data: categories, error: categoriesError } = await admin
     .from("expense_categories")
     .insert(CATEGORIES.map((c) => ({ ...c, org_id: org.id, is_system: true })))
     .select("id, key");
+  if (categoriesError) throw new Error(`categories: ${categoriesError.message}`);
 
   const platformId = (name: string) => platforms?.find((p) => p.name === name)?.id;
   const categoryId = (key: string) => categories?.find((c) => c.key === key)?.id ?? "";
@@ -182,7 +190,7 @@ async function seed() {
     // weekday chart is meant to reveal.
     const resting = random() < (weekday === 5 ? 0.45 : 0.12);
     if (resting) {
-      await admin.from("daily_logs").insert({
+      const { error: restError } = await admin.from("daily_logs").insert({
         org_id: org.id,
         vehicle_id: vehicle.id,
         driver_id: driverId,
@@ -190,6 +198,7 @@ async function seed() {
         status: random() < 0.2 ? "repair" : "off",
         off_reason: "Rest day",
       });
+      if (restError) throw new Error(`${date}: ${restError.message}`);
       logs += 1;
       continue;
     }
@@ -198,7 +207,7 @@ async function seed() {
     const income = Math.round(km * (24 + random() * 14));
     const fuel = Math.round(km * (9.5 + random() * 3.5));
 
-    const { data: log } = await admin
+    const { data: log, error: logError } = await admin
       .from("daily_logs")
       .insert({
         org_id: org.id,
@@ -211,7 +220,9 @@ async function seed() {
       })
       .select("id")
       .single();
-    if (!log) continue;
+    // The demo exists to show believable ratios; a partially seeded org would
+    // quietly present wrong ones, so any failure aborts the run.
+    if (logError || !log) throw new Error(`${date}: ${logError?.message ?? "log insert failed"}`);
     logs += 1;
 
     const earnings = PLATFORMS.map((p) => ({
@@ -220,7 +231,10 @@ async function seed() {
       platform_id: platformId(p.name) ?? "",
       amount: Math.round(income * p.share * (0.6 + random() * 0.8)),
     })).filter((e) => e.amount > 0 && e.platform_id);
-    if (earnings.length) await admin.from("log_earnings").insert(earnings);
+    if (earnings.length) {
+      const { error: earningsError } = await admin.from("log_earnings").insert(earnings);
+      if (earningsError) throw new Error(`${date} earnings: ${earningsError.message}`);
+    }
 
     const expenses = [{ category_id: categoryId("fuel"), amount: fuel }];
     if (random() < 0.35) {
@@ -229,7 +243,7 @@ async function seed() {
         amount: Math.round(40 + random() * 200),
       });
     }
-    await admin.from("expenses").insert(
+    const { error: expensesError } = await admin.from("expenses").insert(
       expenses.map((e) => ({
         ...e,
         org_id: org.id,
@@ -238,11 +252,12 @@ async function seed() {
         expense_date: date,
       })),
     );
+    if (expensesError) throw new Error(`${date} expenses: ${expensesError.message}`);
   }
 
   // Two owner-entered costs, to prove they reach the dashboard totals even
   // though no daily report mentions them.
-  await admin.from("expenses").insert([
+  const { error: standaloneError } = await admin.from("expenses").insert([
     {
       org_id: org.id,
       vehicle_id: vehicle.id,
@@ -260,13 +275,15 @@ async function seed() {
       note: "Wrong-lane fine",
     },
   ]);
+  if (standaloneError) throw new Error(`standalone expenses: ${standaloneError.message}`);
 
   // Two payouts against the pay accrued above, so the Drivers screen shows a
   // real outstanding balance rather than "everything is owed".
-  await admin.from("driver_payments").insert([
+  const { error: paymentsError } = await admin.from("driver_payments").insert([
     { org_id: org.id, driver_id: driverId, amount: 9000, paid_on: isoDaysAgo(58), method: "cash" },
     { org_id: org.id, driver_id: driverId, amount: 7500, paid_on: isoDaysAgo(27), method: "cash" },
   ]);
+  if (paymentsError) throw new Error(`driver payments: ${paymentsError.message}`);
 
   console.log(`Seeded ${logs} days for "${DEMO_ORG}".`);
   console.log(`Owner:  ${DEMO_EMAIL} / ${DEMO_PASSWORD}`);

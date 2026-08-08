@@ -26,6 +26,11 @@ export default async function AdminLayout({ children }: LayoutProps<"/">) {
       orgName={session.org.name}
       userName={session.profile.full_name}
       nav={nav}
+      labels={{
+        nav: dict.common.mainNav,
+        openMenu: dict.common.openMenu,
+        closeMenu: dict.common.closeMenu,
+      }}
       signOut={
         <form action={signOut}>
           <button

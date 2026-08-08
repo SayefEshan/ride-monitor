@@ -329,6 +329,7 @@ async function writeToDatabase(orgId: string, vehicleArg: string | undefined, da
   }
 
   let written = 0;
+  const partial: string[] = [];
   for (const day of days) {
     const { data: log, error } = await db
       .from("daily_logs")
@@ -354,9 +355,19 @@ async function writeToDatabase(orgId: string, vehicleArg: string | undefined, da
       continue;
     }
 
-    // Re-running the import must not double the numbers.
-    await db.from("log_earnings").delete().eq("log_id", log.id);
-    await db.from("expenses").delete().eq("log_id", log.id);
+    // Re-running the import must not double the numbers. A day whose child
+    // rows fail after the log row landed is only *partially* imported — it
+    // must not count as written, or the summary would vouch for money figures
+    // that never made it in. Re-running the import heals it.
+    const [{ error: clearEarningsError }, { error: clearExpensesError }] = await Promise.all([
+      db.from("log_earnings").delete().eq("log_id", log.id),
+      db.from("expenses").delete().eq("log_id", log.id),
+    ]);
+    if (clearEarningsError || clearExpensesError) {
+      console.error(`  ${day.date}: could not clear previous rows`);
+      partial.push(day.date);
+      continue;
+    }
 
     const earnings = [
       { platform_id: uberId, amount: day.uber },
@@ -364,10 +375,15 @@ async function writeToDatabase(orgId: string, vehicleArg: string | undefined, da
       { platform_id: indriveId, amount: day.indrive },
     ].filter((e) => e.amount > 0);
 
+    let dayFailed = false;
     if (earnings.length > 0) {
-      await db
+      const { error: earningsError } = await db
         .from("log_earnings")
         .insert(earnings.map((e) => ({ ...e, org_id: orgId, log_id: log.id })));
+      if (earningsError) {
+        console.error(`  ${day.date}: earnings failed: ${earningsError.message}`);
+        dayFailed = true;
+      }
     }
 
     const expenses = [
@@ -375,8 +391,8 @@ async function writeToDatabase(orgId: string, vehicleArg: string | undefined, da
       { category_id: otherId, amount: day.other },
     ].filter((e) => e.amount > 0);
 
-    if (expenses.length > 0) {
-      await db.from("expenses").insert(
+    if (!dayFailed && expenses.length > 0) {
+      const { error: expensesError } = await db.from("expenses").insert(
         expenses.map((e) => ({
           ...e,
           org_id: orgId,
@@ -385,12 +401,27 @@ async function writeToDatabase(orgId: string, vehicleArg: string | undefined, da
           expense_date: day.date,
         })),
       );
+      if (expensesError) {
+        console.error(`  ${day.date}: expenses failed: ${expensesError.message}`);
+        dayFailed = true;
+      }
+    }
+
+    if (dayFailed) {
+      partial.push(day.date);
+      continue;
     }
 
     written += 1;
   }
 
   console.log(`\nWrote ${written} days into the database.`);
+  if (partial.length > 0) {
+    console.error(
+      `${partial.length} day(s) partially imported — re-run the import to heal them: ${partial.join(", ")}`,
+    );
+    process.exitCode = 1;
+  }
 }
 
 function writeReport(

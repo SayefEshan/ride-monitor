@@ -52,7 +52,7 @@ export default async function SettingsPage() {
             <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
               {dict.admin.addVehicle}
             </h2>
-            <AddVehicleForm />
+            <AddVehicleForm dict={dict} />
           </Card>
         </div>
 
@@ -82,7 +82,7 @@ export default async function SettingsPage() {
             <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
               {dict.admin.addDriver}
             </h2>
-            <AddDriverForm vehicles={vehicleList} />
+            <AddDriverForm vehicles={vehicleList} dict={dict} />
           </Card>
         </div>
       </div>

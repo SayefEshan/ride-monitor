@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { createSupabaseServerClient, requireOwner } from "@/lib/supabase/server";
 
+// Codes, not sentences; the form maps them through the dictionary.
 export type PaymentState = { error?: string; success?: string };
 
 const schema = z.object({
@@ -35,7 +36,7 @@ export async function recordPayment(
     method: formData.get("method") || undefined,
     note: formData.get("note") || undefined,
   });
-  if (!parsed.success) return { error: "Enter an amount and a date." };
+  if (!parsed.success) return { error: "invalid" };
 
   const supabase = await createSupabaseServerClient();
 
@@ -47,7 +48,7 @@ export async function recordPayment(
     .eq("id", parsed.data.driverId)
     .eq("org_id", session.profile.org_id)
     .maybeSingle();
-  if (!driver) return { error: "That driver is not part of this business." };
+  if (!driver) return { error: "driver" };
 
   const { error } = await supabase.from("driver_payments").insert({
     org_id: session.profile.org_id,
@@ -58,9 +59,9 @@ export async function recordPayment(
     note: parsed.data.note ?? null,
   });
 
-  if (error) return { error: "Could not record the payment." };
+  if (error) return { error: "save" };
 
   revalidatePath("/drivers");
   revalidatePath("/dashboard");
-  return { success: "Payment recorded." };
+  return { success: "saved" };
 }

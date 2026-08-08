@@ -76,7 +76,7 @@ export default async function HistoryPage({ searchParams }: PageProps<"/history"
         <div className="flex items-center justify-between gap-2">
           <Link
             href={`/history?month=${prevMonth}`}
-            aria-label="Previous month"
+            aria-label={dict.common.prevMonth}
             className="grid size-11 shrink-0 place-items-center rounded-xl border border-hairline text-body"
           >
             ←
@@ -86,7 +86,7 @@ export default async function HistoryPage({ searchParams }: PageProps<"/history"
           </span>
           <Link
             href={canGoForward ? `/history?month=${nextMonth}` : "/history"}
-            aria-label="Next month"
+            aria-label={dict.common.nextMonth}
             aria-disabled={!canGoForward}
             className={cn(
               "grid size-11 shrink-0 place-items-center rounded-xl border border-hairline text-body",

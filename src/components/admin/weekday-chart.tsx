@@ -13,7 +13,7 @@ export type WeekdayPoint = { day: string; net: number; days: number };
  * cover fuel" is a decision the owner can act on — change the shift, or take
  * the day off — which a running total never surfaces.
  */
-export function WeekdayChart({ data }: { data: WeekdayPoint[] }) {
+export function WeekdayChart({ data, averageLabel }: { data: WeekdayPoint[]; averageLabel: string }) {
   return (
     <div className="h-44 w-full">
       <ResponsiveContainer width="100%" height="100%">
@@ -26,7 +26,7 @@ export function WeekdayChart({ data }: { data: WeekdayPoint[] }) {
           />
           <Tooltip
             cursor={{ fill: "var(--surface-sunken)" }}
-            formatter={(value: unknown) => [formatMoney(Number(value ?? 0)), "Average profit"]}
+            formatter={(value: unknown) => [formatMoney(Number(value ?? 0)), averageLabel]}
             contentStyle={{
               background: "var(--surface-raised)",
               border: "1px solid var(--border-subtle)",

@@ -22,6 +22,7 @@ export function AppShell({
   orgName,
   userName,
   nav,
+  labels,
   signOut,
   themeToggle,
   children,
@@ -29,6 +30,7 @@ export function AppShell({
   orgName: string;
   userName: string;
   nav: NavItem[];
+  labels: { nav: string; openMenu: string; closeMenu: string };
   signOut: ReactNode;
   themeToggle: ReactNode;
   children: ReactNode;
@@ -92,7 +94,7 @@ export function AppShell({
         <button
           type="button"
           onClick={() => setOpen(true)}
-          aria-label="Open menu"
+          aria-label={labels.openMenu}
           aria-expanded={open}
           className="grid size-11 shrink-0 place-items-center rounded-xl text-body hover:bg-sunken"
         >
@@ -106,7 +108,7 @@ export function AppShell({
         <div className="fixed inset-0 z-40 lg:hidden">
           <button
             type="button"
-            aria-label="Close menu"
+            aria-label={labels.closeMenu}
             onClick={() => setOpen(false)}
             className="animate-scrim absolute inset-0 bg-ink-950/50 backdrop-blur-[2px]"
           />
@@ -119,14 +121,14 @@ export function AppShell({
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                aria-label="Close menu"
+                aria-label={labels.closeMenu}
                 className="grid size-10 shrink-0 place-items-center rounded-xl text-muted hover:bg-sunken hover:text-body"
               >
                 <X aria-hidden className="size-5" />
               </button>
             </div>
 
-            <nav aria-label="Main" className="flex-1 overflow-y-auto px-3 pb-4">
+            <nav aria-label={labels.nav} className="flex-1 overflow-y-auto px-3 pb-4">
               {navList}
             </nav>
 
@@ -146,7 +148,7 @@ export function AppShell({
           <p className="truncate text-xs text-muted">{userName}</p>
         </div>
 
-        <nav aria-label="Main" className="flex-1 px-3">
+        <nav aria-label={labels.nav} className="flex-1 px-3">
           {navList}
         </nav>
 

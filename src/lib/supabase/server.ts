@@ -47,18 +47,23 @@ export const getSessionContext = cache(async (): Promise<SessionContext | null> 
   } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const { data: profile } = await supabase
+  // A failed query must throw, not read as "no profile yet" — requireSession
+  // routes a null into onboarding, which would greet an existing owner with a
+  // signup form over a transient database blip.
+  const { data: profile, error: profileError } = await supabase
     .from("profiles")
     .select("*")
     .eq("id", user.id)
     .maybeSingle<Profile>();
+  if (profileError) throw new Error("profile lookup failed", { cause: profileError });
   if (!profile) return null;
 
-  const { data: org } = await supabase
+  const { data: org, error: orgError } = await supabase
     .from("organizations")
     .select("*")
     .eq("id", profile.org_id)
     .maybeSingle<Organization>();
+  if (orgError) throw new Error("organization lookup failed", { cause: orgError });
   if (!org) return null;
 
   return { userId: user.id, profile, org };

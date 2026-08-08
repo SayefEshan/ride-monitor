@@ -79,7 +79,7 @@ export default async function ExpensesPage({ searchParams }: PageProps<"/expense
         <nav className="flex items-center gap-2 text-sm">
           <Link
             href={`/expenses?month=${previous}`}
-            aria-label="Previous month"
+            aria-label={dict.common.prevMonth}
             className="rounded-lg border border-hairline px-3 py-1.5 text-body"
           >
             ←
@@ -89,7 +89,7 @@ export default async function ExpensesPage({ searchParams }: PageProps<"/expense
           </span>
           <Link
             href={canGoForward ? `/expenses?month=${nextMonth}` : "/expenses"}
-            aria-label="Next month"
+            aria-label={dict.common.nextMonth}
             aria-disabled={!canGoForward}
             className={cn(
               "rounded-lg border border-hairline px-3 py-1.5 text-body",
@@ -137,7 +137,7 @@ export default async function ExpensesPage({ searchParams }: PageProps<"/expense
           <p className="mt-1 text-sm text-muted">{dict.admin.standaloneHint}</p>
         </div>
         {(vehicles ?? []).length === 0 || (categories ?? []).length === 0 ? (
-          <EmptyState title={dict.admin.noData} body="Add a vehicle in Settings first." />
+          <EmptyState title={dict.admin.noData} body={dict.admin.addVehicleFirst} />
         ) : (
           <ExpenseForm
             vehicles={(vehicles ?? []) as Vehicle[]}

@@ -37,10 +37,7 @@ export default async function TodayPage() {
 
   if (!vehicleId) {
     return (
-      <EmptyState
-        title={dict.admin.noData}
-        body="No vehicle is assigned to you yet. Ask the owner to assign one."
-      />
+      <EmptyState title={dict.admin.noData} body={dict.driver.noVehicle} />
     );
   }
 
@@ -86,6 +83,9 @@ export default async function TodayPage() {
       </header>
 
       <TodayForm
+        // Form state initialises from props; the key forces a remount if this
+        // instance is ever reused for a different day or vehicle.
+        key={`${vehicleId}-${logDate}`}
         dict={dict}
         locale={locale}
         orgId={session.profile.org_id}
@@ -93,7 +93,9 @@ export default async function TodayPage() {
         logDate={logDate}
         platforms={(platforms ?? []) as Platform[]}
         categories={(categories ?? []) as ExpenseCategory[]}
-        defaultDriverPay={Number(session.profile.pay_value) || 0}
+        defaultDriverPay={
+          session.profile.pay_model === "fixed_daily" ? Number(session.profile.pay_value) || 0 : 0
+        }
         existing={existing}
       />
     </div>

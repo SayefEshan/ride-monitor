@@ -19,7 +19,15 @@ type Point = { date: string; income: number; expense: number };
  * Income against total outgoings. Two filled areas rather than bars: the shape
  * of the gap between them is the story, and it survives being glanced at.
  */
-export function TrendChart({ data, locale }: { data: Point[]; locale: Locale }) {
+export function TrendChart({
+  data,
+  locale,
+  labels,
+}: {
+  data: Point[];
+  locale: Locale;
+  labels: { income: string; expense: string };
+}) {
   return (
     <div className="h-56 w-full">
       <ResponsiveContainer width="100%" height="100%">
@@ -65,7 +73,7 @@ export function TrendChart({ data, locale }: { data: Point[]; locale: Locale }) 
           <Area
             type="monotone"
             dataKey="income"
-            name="Income"
+            name={labels.income}
             stroke="var(--color-income)"
             strokeWidth={2}
             fill="url(#fillIncome)"
@@ -73,7 +81,7 @@ export function TrendChart({ data, locale }: { data: Point[]; locale: Locale }) 
           <Area
             type="monotone"
             dataKey="expense"
-            name="Expenses"
+            name={labels.expense}
             stroke="var(--color-expense)"
             strokeWidth={2}
             fill="url(#fillExpense)"

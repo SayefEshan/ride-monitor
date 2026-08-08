@@ -27,12 +27,18 @@ export function ExpenseForm({
   const [state, formAction] = useActionState<ExpenseState, FormData>(addExpense, {});
   const label = (c: ExpenseCategory) => (locale === "bn" && c.name_bn ? c.name_bn : c.name);
 
+  const errors: Record<string, string> = {
+    invalid: dict.admin.expenseInvalid,
+    unknown: dict.admin.expenseUnknown,
+    save: dict.admin.expenseSaveFailed,
+  };
+
   return (
     <form action={formAction} className="space-y-4">
-      {state.error && <ErrorNote>{state.error}</ErrorNote>}
+      {state.error && <ErrorNote>{errors[state.error] ?? dict.admin.expenseSaveFailed}</ErrorNote>}
       {state.success && (
         <p role="status" className="rounded-xl bg-income-soft px-4 py-3 text-sm font-medium text-income-deep">
-          {state.success}
+          {dict.admin.expenseSaved}
         </p>
       )}
 

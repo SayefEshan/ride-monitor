@@ -173,11 +173,13 @@ export default async function DashboardPage() {
           income={todayTotals.income}
           expense={todayTotals.expense}
           driverPay={todayTotals.driverPay}
+          net={todayTotals.net}
           labels={{
             income: dict.admin.income,
             expense: dict.admin.expense,
             driverPay: dict.admin.driverPay,
             profit: dict.admin.netProfit,
+            keepShare: dict.admin.keepShare,
           }}
         />
       </Card>
@@ -225,6 +227,7 @@ export default async function DashboardPage() {
           accent="profit"
           icon={<ArrowUpRight className="size-4" />}
           delta={monthChange}
+          deltaLabel={dict.admin.vsSameDays}
         />
         <Tile
           label={`${dict.admin.fuel} / ${dict.admin.perKm}`}
@@ -236,18 +239,22 @@ export default async function DashboardPage() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card className="space-y-3">
-          <CardHead title={dict.admin.profitTrend} note="Last 30 days" />
+          <CardHead title={dict.admin.profitTrend} note={dict.admin.last30Days} />
           {series.some((point) => point.income > 0) ? (
-            <TrendChart data={series} locale={locale} />
+            <TrendChart
+              data={series}
+              locale={locale}
+              labels={{ income: dict.admin.income, expense: dict.admin.expense }}
+            />
           ) : (
             <EmptyState title={dict.admin.noData} />
           )}
         </Card>
 
         <Card className="space-y-3">
-          <CardHead title="Profit by weekday" note="Average, last 90 days" />
+          <CardHead title={dict.admin.profitByWeekday} note={dict.admin.avgLast90Days} />
           {weekdays.some((point) => point.days > 0) ? (
-            <WeekdayChart data={weekdays} />
+            <WeekdayChart data={weekdays} averageLabel={dict.admin.averageProfit} />
           ) : (
             <EmptyState title={dict.admin.noData} />
           )}
@@ -393,12 +400,14 @@ function Tile({
   accent,
   icon,
   delta,
+  deltaLabel,
 }: {
   label: string;
   value: string;
   accent: keyof typeof ACCENTS;
   icon: ReactNode;
   delta?: number | null;
+  deltaLabel?: string;
 }) {
   return (
     <div className="rounded-card border border-hairline bg-raised p-3.5">
@@ -416,7 +425,7 @@ function Tile({
             delta >= 0 ? "text-income-deep" : "text-expense-deep",
           )}
         >
-          {delta >= 0 ? "▲" : "▼"} {formatPercent(Math.abs(delta))} vs same days last month
+          {delta >= 0 ? "▲" : "▼"} {formatPercent(Math.abs(delta))} {deltaLabel}
         </p>
       )}
     </div>

@@ -39,7 +39,10 @@ export async function proxy(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
-  const isPublic = PUBLIC_PATHS.some((path) => pathname.startsWith(path));
+  // Boundary-anchored: a future /login-history must not inherit /login's pass.
+  const isPublic = PUBLIC_PATHS.some(
+    (path) => pathname === path || pathname.startsWith(`${path}/`),
+  );
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();

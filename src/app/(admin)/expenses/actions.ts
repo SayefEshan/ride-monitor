@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { createSupabaseServerClient, requireOwner } from "@/lib/supabase/server";
 
+// Codes, not sentences; the form maps them through the dictionary.
 export type ExpenseState = { error?: string; success?: string };
 
 const schema = z.object({
@@ -32,7 +33,7 @@ export async function addExpense(_prev: ExpenseState, formData: FormData): Promi
     amount: formData.get("amount"),
     note: formData.get("note") || undefined,
   });
-  if (!parsed.success) return { error: "Enter an amount, a date and a category." };
+  if (!parsed.success) return { error: "invalid" };
 
   const supabase = await createSupabaseServerClient();
   const orgId = session.profile.org_id;
@@ -52,7 +53,7 @@ export async function addExpense(_prev: ExpenseState, formData: FormData): Promi
       .maybeSingle(),
   ]);
 
-  if (!vehicle || !category) return { error: "Unknown vehicle or category." };
+  if (!vehicle || !category) return { error: "unknown" };
 
   const { error } = await supabase.from("expenses").insert({
     org_id: orgId,
@@ -65,10 +66,10 @@ export async function addExpense(_prev: ExpenseState, formData: FormData): Promi
     created_by: session.userId,
   });
 
-  if (error) return { error: "Could not save the expense." };
+  if (error) return { error: "save" };
 
   revalidatePath("/expenses");
   revalidatePath("/dashboard");
   revalidatePath("/reports");
-  return { success: "Expense saved." };
+  return { success: "saved" };
 }

@@ -7,7 +7,9 @@ import { identifierToEmail, normalizeBdPhone } from "@/lib/identity";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient, requireOwner } from "@/lib/supabase/server";
 
-export type ActionState = { error?: string; success?: string };
+// error/success carry language-neutral codes; the form maps them through the
+// dictionary. `phone` rides along for the success templates to interpolate.
+export type ActionState = { error?: string; success?: string; phone?: string };
 
 const vehicleSchema = z.object({
   name: z.string().min(1).max(120),
@@ -22,7 +24,7 @@ export async function addVehicle(_prev: ActionState, formData: FormData): Promis
     plateNo: formData.get("plateNo") || undefined,
     fuelType: formData.get("fuelType") || "LPG",
   });
-  if (!parsed.success) return { error: "Please check the vehicle details." };
+  if (!parsed.success) return { error: "invalid" };
 
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase.from("vehicles").insert({
@@ -32,16 +34,17 @@ export async function addVehicle(_prev: ActionState, formData: FormData): Promis
     fuel_type: parsed.data.fuelType,
   });
 
-  if (error) return { error: "Could not add the vehicle." };
+  if (error) return { error: "vehicleSave" };
 
   revalidatePath("/settings");
-  return { success: "Vehicle added." };
+  return { success: "vehicleAdded" };
 }
 
 const driverSchema = z.object({
   fullName: z.string().min(1).max(120),
   phone: z.string().min(1),
-  password: z.string().min(6),
+  // Same floor as the owner's password: a driver login moves money records.
+  password: z.string().min(8),
   payValue: z.coerce.number().min(0).max(1_000_000).default(0),
   vehicleId: z.string().uuid().optional(),
 });
@@ -59,11 +62,11 @@ export async function addDriver(_prev: ActionState, formData: FormData): Promise
     payValue: formData.get("payValue") || 0,
     vehicleId: formData.get("vehicleId") || undefined,
   });
-  if (!parsed.success) return { error: "Please check the driver details." };
+  if (!parsed.success) return { error: "invalid" };
 
   const phone = normalizeBdPhone(parsed.data.phone);
   const email = identifierToEmail(parsed.data.phone);
-  if (!phone || !email) return { error: "Enter a valid Bangladeshi mobile number." };
+  if (!phone || !email) return { error: "phone" };
 
   const admin = createSupabaseAdminClient();
   const { data: created, error: authError } = await admin.auth.admin.createUser({
@@ -74,9 +77,7 @@ export async function addDriver(_prev: ActionState, formData: FormData): Promise
 
   if (authError || !created.user) {
     const exists = authError?.message?.toLowerCase().includes("already");
-    return {
-      error: exists ? "That number already has an account." : "Could not create the login.",
-    };
+    return { error: exists ? "exists" : "createLogin" };
   }
 
   // org_id comes from the caller's own session, never from the form, so an
@@ -94,7 +95,7 @@ export async function addDriver(_prev: ActionState, formData: FormData): Promise
 
   if (profileError) {
     await admin.auth.admin.deleteUser(created.user.id);
-    return { error: "Could not create the driver profile." };
+    return { error: "profile" };
   }
 
   if (parsed.data.vehicleId) {
@@ -108,14 +109,22 @@ export async function addDriver(_prev: ActionState, formData: FormData): Promise
       .maybeSingle();
 
     if (vehicle) {
-      await admin.from("vehicle_assignments").insert({
+      const { error: assignmentError } = await admin.from("vehicle_assignments").insert({
         org_id: session.profile.org_id,
         vehicle_id: vehicle.id,
         driver_id: created.user.id,
       });
+
+      // The login exists and works; only the vehicle link failed. Say so —
+      // a flat success here would leave the driver unable to file a day with
+      // no visible reason.
+      if (assignmentError) {
+        revalidatePath("/settings");
+        return { success: "assignWarn", phone: parsed.data.phone };
+      }
     }
   }
 
   revalidatePath("/settings");
-  return { success: `Driver added. They sign in with ${parsed.data.phone}.` };
+  return { success: "driverAdded", phone: parsed.data.phone };
 }

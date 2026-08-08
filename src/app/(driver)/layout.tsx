@@ -63,7 +63,7 @@ export default async function DriverLayout({ children }: LayoutProps<"/">) {
       {/* Bottom padding clears the fixed tab bar plus the home indicator. */}
       <main className="mx-auto w-full max-w-lg flex-1 px-4 pb-32 pt-4">{children}</main>
 
-      <DriverTabs tabs={tabs} />
+      <DriverTabs tabs={tabs} ariaLabel={dict.common.mainNav} />
     </div>
   );
 }

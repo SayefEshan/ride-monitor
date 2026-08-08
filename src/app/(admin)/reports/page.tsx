@@ -2,10 +2,11 @@ import Link from "next/link";
 import { Download } from "lucide-react";
 
 import { Card, EmptyState } from "@/components/ui";
-import { platformTotals, summarize } from "@/lib/analytics";
+import { platformTotals, summarize, withStandalone } from "@/lib/analytics";
 import { cn } from "@/lib/cn";
 import {
   addDays,
+  comparablePreviousMonth,
   formatKm,
   formatMoney,
   formatMonth,
@@ -30,9 +31,18 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
       ? params.month
       : today.slice(0, 7);
   const range = monthRange(`${month}-01`);
-  const prevRange = monthRange(addDays(range.start, -1));
+  // For the in-progress month, compare like-for-like elapsed days — a partial
+  // month against a full one reads as a profit collapse on every visit.
+  const isCurrentMonth = month === today.slice(0, 7);
+  const prevRange = isCurrentMonth
+    ? comparablePreviousMonth(today)
+    : monthRange(addDays(range.start, -1));
 
-  const [{ data: summaryRows }, { data: expenseRows }, { data: earningRows }] = await Promise.all([
+  const [
+    { data: summaryRows, error: summaryError },
+    { data: expenseRows, error: expenseError },
+    { data: earningRows, error: earningError },
+  ] = await Promise.all([
     supabase
       .from("daily_summary")
       .select("*")
@@ -42,7 +52,7 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
     // the same kinds of cost on both sides.
     supabase
       .from("expenses")
-      .select("amount, expense_date, expense_categories(name, name_bn)")
+      .select("amount, expense_date, log_id, expense_categories(name, name_bn)")
       .gte("expense_date", prevRange.start)
       .lte("expense_date", range.end),
     supabase
@@ -52,17 +62,12 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
       .lte("daily_logs.log_date", range.end),
   ]);
 
-  const all = (summaryRows ?? []) as DailySummary[];
-  const totals = summarize(
-    all.filter((row) => row.log_date >= range.start && row.log_date <= range.end),
-  );
-  const previous = summarize(
-    all.filter((row) => row.log_date >= prevRange.start && row.log_date <= prevRange.end),
-  );
+  // Fail loudly rather than render a plausible report full of zeros.
+  const queryError = summaryError ?? expenseError ?? earningError;
+  if (queryError) throw new Error("report queries failed", { cause: queryError });
 
-  // The expenses table is the authority on outgoings: it holds both what the
-  // driver logged and what the owner entered directly. `daily_summary` sees
-  // only the former, so its expense figure is replaced rather than added to.
+  const all = (summaryRows ?? []) as DailySummary[];
+
   const inMonth = (expenseRows ?? []).filter(
     (row) => row.expense_date >= range.start && row.expense_date <= range.end,
   );
@@ -70,9 +75,25 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
     (row) => row.expense_date >= prevRange.start && row.expense_date <= prevRange.end,
   );
 
-  const expenseTotal = inMonth.reduce((sum, row) => sum + Number(row.amount), 0);
-  const prevExpenseTotal = inPrevMonth.reduce((sum, row) => sum + Number(row.amount), 0);
-  const netProfit = totals.income - expenseTotal - totals.driverPay;
+  // Owner-entered costs (no log behind them) are folded in via the same
+  // withStandalone() the dashboard uses, so the two screens can never quote
+  // different profit for the same month.
+  const standalone = (rows: typeof inMonth) =>
+    rows
+      .filter((row) => row.log_id === null)
+      .map((row) => ({ expense_date: row.expense_date, amount: Number(row.amount) }));
+
+  const totals = withStandalone(
+    summarize(all.filter((row) => row.log_date >= range.start && row.log_date <= range.end)),
+    standalone(inMonth),
+  );
+  const previous = withStandalone(
+    summarize(all.filter((row) => row.log_date >= prevRange.start && row.log_date <= prevRange.end)),
+    standalone(inPrevMonth),
+  );
+
+  const expenseTotal = totals.expense;
+  const netProfit = totals.net;
 
   const byCategory = new Map<string, number>();
   for (const row of inMonth) {
@@ -99,7 +120,7 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
     }),
   );
 
-  const prevNet = previous.income - prevExpenseTotal - previous.driverPay;
+  const prevNet = previous.net;
   const change = prevNet !== 0 ? ((netProfit - prevNet) / Math.abs(prevNet)) * 100 : null;
   const perDay = totals.workedDays > 0 ? netProfit / totals.workedDays : 0;
 
@@ -114,7 +135,7 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
         <div className="flex items-center gap-2 text-sm">
           <Link
             href={`/reports?month=${prevMonth}`}
-            aria-label="Previous month"
+            aria-label={dict.common.prevMonth}
             className="rounded-lg border border-hairline px-3 py-1.5 text-body"
           >
             ←
@@ -124,7 +145,7 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
           </span>
           <Link
             href={canGoForward ? `/reports?month=${nextMonth}` : "/reports"}
-            aria-label="Next month"
+            aria-label={dict.common.nextMonth}
             aria-disabled={!canGoForward}
             className={cn(
               "rounded-lg border border-hairline px-3 py-1.5 text-body",
@@ -160,7 +181,8 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
               </p>
               {change !== null && (
                 <p className={cn("mt-1 text-sm", change >= 0 ? "text-income-deep" : "text-expense")}>
-                  {change >= 0 ? "▲" : "▼"} {formatPercent(Math.abs(change))} vs last month
+                  {change >= 0 ? "▲" : "▼"} {formatPercent(Math.abs(change))}{" "}
+                  {dict.admin.vsLastMonth}
                 </p>
               )}
             </div>
@@ -179,7 +201,7 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
               <Cell label={dict.admin.distance} value={formatKm(totals.km)} />
               <Cell
                 label={dict.admin.profitMargin}
-                value={totals.income > 0 ? formatPercent((netProfit / totals.income) * 100) : "—"}
+                value={totals.income > 0 ? formatPercent(totals.margin) : "—"}
               />
               <Cell label={dict.admin.perWorkingDay} value={formatMoney(perDay)} />
             </dl>

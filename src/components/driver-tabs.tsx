@@ -14,13 +14,13 @@ export type DriverTab = { href: string; label: string; icon: ReactNode };
  * Client-side only so the current tab can be marked — without it every
  * destination looked identical and the app gave no sense of place.
  */
-export function DriverTabs({ tabs }: { tabs: DriverTab[] }) {
+export function DriverTabs({ tabs, ariaLabel }: { tabs: DriverTab[]; ariaLabel: string }) {
   const pathname = usePathname();
   const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
 
   return (
     <nav
-      aria-label="Main"
+      aria-label={ariaLabel}
       className="fixed inset-x-0 bottom-0 z-10 border-t border-hairline bg-raised/95 pb-[env(safe-area-inset-bottom)] backdrop-blur"
     >
       <ul className="mx-auto flex max-w-lg">

@@ -13,7 +13,9 @@ export function LoginForm({ dict, next }: { dict: Dictionary; next: string }) {
     <form action={formAction} className="space-y-5">
       <input type="hidden" name="next" value={next} />
 
-      {state.error && <ErrorNote>{dict.auth.failed}</ErrorNote>}
+      {state.error && (
+        <ErrorNote>{state.error === "throttled" ? dict.auth.throttled : dict.auth.failed}</ErrorNote>
+      )}
 
       <Field label={dict.auth.identifier} hint={dict.auth.identifierHint} htmlFor="identifier">
         <TextInput

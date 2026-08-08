@@ -43,7 +43,7 @@ export default async function DriversPage() {
     return (
       <div className="space-y-4">
         <h1 className="text-xl font-semibold text-body">{dict.admin.drivers}</h1>
-        <EmptyState title={dict.admin.noData} body="Add a driver from Settings to begin." />
+        <EmptyState title={dict.admin.noData} body={dict.admin.addDriverFirst} />
       </div>
     );
   }

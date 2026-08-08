@@ -138,8 +138,14 @@ export default async function DriverHomePage() {
             <dt className="text-xs text-muted">{dict.driver.paid}</dt>
             <dd className="tnum mt-1 font-semibold text-body">{formatMoney(paid)}</dd>
           </div>
-          <div className="rounded-xl bg-warn-soft p-3">
-            <dt className="text-xs text-warn-deep">{dict.driver.balance}</dt>
+          {/* Amber while money is owed, green once settled — same rule as the
+              owner's driver ledger, so both read the hue the same way. */}
+          <div
+            className={cn("rounded-xl p-3", accrued - paid > 0 ? "bg-warn-soft" : "bg-income-soft")}
+          >
+            <dt className={cn("text-xs", accrued - paid > 0 ? "text-warn-deep" : "text-income-deep")}>
+              {dict.driver.balance}
+            </dt>
             <dd className="tnum mt-1 font-semibold text-body">{formatMoney(accrued - paid)}</dd>
           </div>
         </dl>

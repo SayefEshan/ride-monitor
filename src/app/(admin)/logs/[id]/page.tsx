@@ -41,12 +41,13 @@ export default async function LogDetailPage({ params }: PageProps<"/logs/[id]">)
 
   // Receipts live in a private bucket, so each one needs a short-lived signed
   // URL rather than a public link.
-  const receipts: { id: string; url: string }[] = [];
+  const receipts: { id: string; url: string; label: string | null }[] = [];
   for (const attachment of attachments ?? []) {
     const { data: signed } = await supabase.storage
       .from("receipts")
       .createSignedUrl(attachment.storage_path, 60 * 10);
-    if (signed?.signedUrl) receipts.push({ id: attachment.id, url: signed.signedUrl });
+    if (signed?.signedUrl)
+      receipts.push({ id: attachment.id, url: signed.signedUrl, label: attachment.label ?? null });
   }
 
   const vehicle = log.vehicles as unknown as { name: string } | null;
@@ -161,12 +162,13 @@ export default async function LogDetailPage({ params }: PageProps<"/logs/[id]">)
           <EmptyState title={dict.driver.noDocuments} />
         ) : (
           <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {receipts.map((receipt) => (
+            {receipts.map((receipt, index) => (
               <li key={receipt.id}>
                 <a href={receipt.url} target="_blank" rel="noreferrer">
                   <Image
                     src={receipt.url}
-                    alt=""
+                    // These are evidence the owner reviews, not decoration.
+                    alt={receipt.label ?? `${dict.common.photo} ${index + 1}`}
                     width={320}
                     height={320}
                     unoptimized

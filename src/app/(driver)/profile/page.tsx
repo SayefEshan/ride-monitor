@@ -1,4 +1,5 @@
 import { Card, EmptyState } from "@/components/ui";
+import { cn } from "@/lib/cn";
 import { formatDate, formatMoney } from "@/lib/format";
 import { formatPhone } from "@/lib/identity";
 import { getDictionary } from "@/lib/i18n";
@@ -48,8 +49,12 @@ export default async function ProfilePage() {
             <dt className="text-xs text-muted">{dict.driver.paid}</dt>
             <dd className="tnum mt-1 font-semibold text-body">{formatMoney(paid)}</dd>
           </div>
-          <div className="rounded-xl bg-profit-soft p-3">
-            <dt className="text-xs text-profit-deep">{dict.driver.balance}</dt>
+          {/* Amber while money is owed, green once settled — the balance is a
+              needs-attention figure, not profit, per the design system. */}
+          <div className={cn("rounded-xl p-3", accrued - paid > 0 ? "bg-warn-soft" : "bg-income-soft")}>
+            <dt className={cn("text-xs", accrued - paid > 0 ? "text-warn-deep" : "text-income-deep")}>
+              {dict.driver.balance}
+            </dt>
             <dd className="tnum mt-1 font-semibold text-body">{formatMoney(accrued - paid)}</dd>
           </div>
         </dl>

@@ -30,7 +30,10 @@ export async function GET(request: NextRequest) {
 
   const supabase = await createSupabaseServerClient();
 
-  const [{ data: summaryRows }, { data: standaloneRows }] = await Promise.all([
+  const [
+    { data: summaryRows, error: summaryError },
+    { data: standaloneRows, error: standaloneError },
+  ] = await Promise.all([
     supabase
       .from("daily_summary")
       .select("*")
@@ -47,6 +50,13 @@ export async function GET(request: NextRequest) {
       .gte("expense_date", range.start)
       .lte("expense_date", range.end),
   ]);
+
+  // An accountant trusts this file. A failed query must be an error, never a
+  // plausible-looking CSV of zeros or one silently missing the owner's costs.
+  if (summaryError || standaloneError) {
+    console.error("CSV export failed:", (summaryError ?? standaloneError)?.message);
+    return new NextResponse("Export failed. Try again.", { status: 500 });
+  }
 
   const rows = (summaryRows ?? []) as DailySummary[];
 
