@@ -145,6 +145,7 @@ const en = {
     errInvalid: "Please check your entries and try again.",
     errVehicle: "The vehicle could not be found.",
     errSave: "Could not save the report. Please try again.",
+    errReviewed: "The owner has already checked this day, so it can no longer be changed.",
     errUpload: "The photo could not be uploaded. Please try again.",
   },
   admin: {
@@ -406,6 +407,7 @@ const bn: Dictionary = {
     errInvalid: "তথ্যগুলো আবার দেখে চেষ্টা করুন।",
     errVehicle: "গাড়িটি খুঁজে পাওয়া যায়নি।",
     errSave: "রিপোর্ট সংরক্ষণ করা যায়নি। আবার চেষ্টা করুন।",
+    errReviewed: "মালিক এই দিনটি যাচাই করে ফেলেছেন, তাই এটি আর বদলানো যাবে না।",
     errUpload: "ছবি আপলোড করা যায়নি। আবার চেষ্টা করুন।",
   },
   admin: {

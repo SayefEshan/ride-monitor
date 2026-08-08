@@ -79,6 +79,20 @@ export async function submitDailyLog(raw: DailyLogPayload): Promise<SubmitResult
   if (vehicleError) return { ok: false, error: "save" };
   if (!vehicle) return { ok: false, error: "vehicle" };
 
+  // Once the owner has reviewed a day it is final for the driver. RLS enforces
+  // that, but the policy failure reads as a generic "could not save" and
+  // invites a retry that can never succeed — so say what actually happened.
+  if (!isOwner) {
+    const { data: reviewed, error: reviewedError } = await supabase
+      .from("daily_logs")
+      .select("reviewed_at")
+      .eq("vehicle_id", input.vehicleId)
+      .eq("log_date", input.logDate)
+      .maybeSingle();
+    if (reviewedError) return { ok: false, error: "save" };
+    if (reviewed?.reviewed_at) return { ok: false, error: "reviewed" };
+  }
+
   const isWorked = input.status === "worked";
 
   // Whose day this is. A driver can only ever file their own. An owner keeps

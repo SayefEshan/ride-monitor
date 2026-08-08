@@ -108,7 +108,9 @@ export function TodayForm({
         ? dict.driver.errVehicle
         : code === "upload"
           ? dict.driver.errUpload
-          : dict.driver.errSave;
+          : code === "reviewed"
+            ? dict.driver.errReviewed
+            : dict.driver.errSave;
 
   const num = (value: string) => {
     const parsed = Number(value);

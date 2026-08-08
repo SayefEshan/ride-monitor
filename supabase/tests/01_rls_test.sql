@@ -366,6 +366,33 @@ $$;
 insert into daily_logs (org_id, vehicle_id, log_date, status)
 values ('bbbbbbbb-0000-0000-0000-000000000000', 'b0000000-0000-0000-0000-00000000000b', date '2026-01-15', 'worked');
 
+-- ---------------------------------------------------------------------------
+-- Embeddable relationships: PostgREST refuses to embed (PGRST201) when two
+-- foreign keys join the same pair of tables, which silently breaks every
+-- `select ... expense_categories(name)` query in the app. Adding a composite
+-- org key without dropping the single-column one it subsumes did exactly that.
+-- daily_logs -> profiles is the one legitimate pair (driver_id, submitted_by).
+-- ---------------------------------------------------------------------------
+do $$
+declare ambiguous text;
+begin
+  select string_agg(pair, ', ') into ambiguous
+  from (
+    select c.conrelid::regclass::text||' -> '||c.confrelid::regclass::text as pair
+    from pg_constraint c
+    where c.contype = 'f' and c.connamespace = 'public'::regnamespace
+    group by c.conrelid, c.confrelid
+    having count(*) > 1
+  ) dup
+  where pair <> 'daily_logs -> profiles';
+
+  if ambiguous is not null then
+    raise exception 'FAIL: ambiguous embed relationships (drop the redundant key): %', ambiguous;
+  end if;
+  raise notice 'pass: every table pair has one embeddable relationship';
+end;
+$$;
+
 do $$
 begin
   raise notice 'pass: same date accepted on a second vehicle';
